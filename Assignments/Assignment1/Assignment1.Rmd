@@ -1,0 +1,216 @@
+---
+title: "JSC370H1 - Assignment 1"
+output: 
+  html_document:
+    theme: readable
+link-citations: yes
+---
+
+# Part 1
+
+```{r, include=FALSE}
+library(dplyr)
+library(leaflet)
+library(ggplot2)
+```
+
+```{r}
+# Read in data
+df <- read.csv("Break_and_Enter_Open_Data.csv")
+
+# Check for import issues in the dimensions, headers, footers, variable names and types in the dataset
+dim(df)
+```
+
+```{r, eval=FALSE}
+head(df) # Results not shown due to space constraints
+tail(df) # Results not shown due to space constraints
+```
+
+```{r, eval=FALSE}
+# List the variables and their types
+str(df) # Results not shown due to space constraints
+```
+
+```{r}
+# Check for and display missing values
+na_observations <- df %>% 
+  filter_all(any_vars(. %in% c('NSA')))
+nrow(na_observations)
+na_observations %>% 
+  select(HOOD_158,NEIGHBOURHOOD_158,HOOD_140,NEIGHBOURHOOD_140,LONG_WGS84,LAT_WGS84) %>% 
+  head()
+
+# Update 'NSA' and improper coordinates in the location-related columns to 'NA'
+df[df=='NSA'] <- NA
+df$LONG_WGS84[df$LONG_WGS84 == 0] <- NA
+df$LAT_WGS84[df$LAT_WGS84 == 0] <- NA
+mean(is.na(df$LONG_WGS84))
+
+# Checking the time variables
+mean(is.na(df$OCC_DATE))
+```
+
+```{r, eval=FALSE}
+table(df$OCC_YEAR) # Results not shown due to space constraints
+table(df$OCC_MONTH) # Results not shown due to space constraints
+table(df$OCC_DOW) # Results not shown due to space constraints
+table(df$OCC_HOUR) # Results not shown due to space constraints
+```
+
+### *Summary*
+
+To begin exploring the dataset, I first read in the data and checked for general import issues.
+
+* The dimensions of the dataframe are 70148 observations and 31 variables.
+* The head and tail of the dataframe did not reveal any import issues with the data.
+* Most of the variables are of type integer or character, with a minority being of type double/numeric. The naming convention uses all capital letters with a few inconsistencies in the position of the underscore character, suggesting that the variables should be renamed for clarity.
+* In the four neighborhood-related variables, missing values are of the form 'NSA'. Observations with these values also had coordinates of (0.0000, 0.0000), which is in the Atlantic Ocean, suggesting they are not valid coordinates. In total, 510 observations (0.7% of the data) had these missing values, which is a small amount, and I replaced them with 'NA'.
+* There are no missing values in the time variables. All months, days of the week, and hours are present in the data.
+    
+# Part 2
+
+```{r}
+# Selecting and renaming columns, and removing NA observations
+df2 <- df %>% 
+  select(OCC_YEAR, OCC_MONTH, OCC_DAY, OCC_HOUR, HOOD_140, LAT_WGS84, LONG_WGS84) %>% 
+  rename(year = OCC_YEAR, month = OCC_MONTH, day = OCC_DAY, hour = OCC_HOUR,
+         hood = HOOD_140, lat = LAT_WGS84, lon = LONG_WGS84) %>% 
+  na.omit()
+
+# Converting the neighborhood factor from character to numeric
+df2$hood <- as.numeric(df2$hood)
+
+# Factoring month
+df2$month <- as.integer(factor(df2$month, levels = month.name))
+
+# Checking for outliers
+summary(df2$lat)
+summary(df2$lon)
+summary(df2$hood)
+```
+
+### *Summary*
+
+I kept the following variables for the following reasons:
+
+* OCC_MONTH and OCC_DAY, since they would be useful for creating the variable for season later, and other time variables relating to the occurrence of the crime such as OCC_YEAR, and OCC_DATE would not be needed for season.
+* OCC_HOUR, since it records the time of day for each break and enter, which would be used for the exploratory plots.
+* HOOD_140, since it was already a factor.
+* The latitude and longitude of the location.
+
+I renamed these variables to make them easier to use and identify. I also removed observations with any missing values for these variables. To identify any outliers:
+
+* I looked at the summary statistics for latitude and longitude. They appeared scaled properly, and there did not seem to be any coordinate that appeared to be outside of Toronto.
+* I looked at the summary statistics for neighborhood, and there did not seem to be any value outside of the range [1, 140], where 140 is the total number of neighborhoods in the city.
+* I have checked the date and time variables in the previous part, with no anomalies found.
+
+# Part 3
+
+```{r, warning=FALSE, message=FALSE}
+# Create a variable for season
+df2 <- df2 %>% 
+  mutate(season = case_when(
+    (month == 3 & day >= 21) | month == 4 | month == 5 | (month == 6 & day < 21) ~ "Spring",
+    (month == 6 & day >= 21) | month == 7 | month == 8 | (month == 9 & day < 21) ~ "Summer",
+    (month == 9 & day >= 21) | month == 10 | month == 11 | (month == 12 & day < 21) ~ "Autumn",
+    (month == 12 & day >= 21) | month == 1 | month == 2 | (month == 3 & day < 21) ~ "Winter"
+    ))
+
+# ANOVA for the relationship between each season in any year and # of break/enters
+df3 <- df2 %>% 
+  group_by(year, season) %>% 
+  mutate(count = length(season)) %>% 
+  ungroup() %>% 
+  select(season, count) %>% 
+  unique() %>% 
+  filter(count > 1000)
+fit1 <- lm(count ~ season, data=df3)
+summary(fit1)
+anova(fit1)
+
+# Chi-squared test on the relationship between seasons overall and # of break/enters
+df4 <- df2 %>% 
+  group_by(season) %>% 
+  mutate(count = length(season)) %>% 
+  ungroup() %>% 
+  select(season, count) %>% 
+  unique()
+matrix1 <- matrix(c(df4$count, rep(mean(df4$count), 4)), ncol=2)
+matrix1
+chisq.test(matrix1)$p.value
+```
+
+### *Summary*
+
+First, I created a new season variable based on the month and day of the break and enter. To find if a season in any given year had the most break and enters, I calculated the number of break and enters for each season in each year. The resulting model (count ~ season) yielded R-squared coefficients of 0.09 (unadjusted) and 0.02 (adjusted), which indicate that for any given year, season likely does not relate to the number of break and enters. Also, the ANOVA for the model has a p-value of 0.3219 > 0.05, which agrees with the results of the model. Thus, for a given year, there is likely not a season with significantly more break and enters.
+
+However, after applying the chi-squared test to find if there was significant variation between seasons across all years compared to the overall mean, I found that the test yielded a p-value of 2.933e-12 < 0.05, which indicates that when the year is not taken into account, season likely does relate to the number of break and enters. Thus, for all years combined, there is likely a season with significantly more break and enters.
+
+To find the season with the most break and enters, I will use the exploratory plots in the next part.
+
+# Part 4
+
+```{r}
+# Exploratory plots of which neighbourhoods, seasons, and time of day break and enters occurred
+hist(df2$hour, main="Histogram of break and enters by hour", xlab="Hour")
+hist(df2$hood, breaks=140, main="Histogram of break and enters by neighborhood", xlab="Neighborhood")
+ggplot(df2, aes(x=season)) + 
+  geom_bar() + 
+  coord_cartesian(ylim = c(15000, 19000)) + 
+  ggtitle("Barplot of number of break and enters by season") + 
+  xlab("Seasons") + 
+  ylab("Count")
+```
+
+### *Summary*
+
+From the graphs, we can see that most break and enters happened around midnight (from 12 to 1 am), and the least happened at 5 to 7 am in the early morning. In addition, most break and enters occurred in neighborhoods 75 to 77, which correspond to the Church-Yonge corridor, Bay Street corridor, and downtown waterfront respectively. This is expected since the downtown area has a higher density of homes compared to elsewhere in Toronto. Finally, fall had the most break and enters, while winter had the least. The chi-squared test from the previous part suggested that this different is likely significant.
+
+# Part 5
+
+```{r}
+# Simple plot of break/enters
+plot(df2$lon, df2$lat, cex=.1, col=4, xlab="Longitude", ylab="Latitude")
+title("Locations of Break and Enters in Toronto")
+
+# Create counts by neighborhood and get average neighborhood coordinates
+leaflet_data <- df2 %>% 
+  group_by(hood) %>% 
+  mutate(n_hood = length(hood), avg_hood_lat = mean(lat), avg_hood_lon = mean(lon)) %>% 
+  ungroup() %>% 
+  select(n_hood, avg_hood_lat, avg_hood_lon) %>% 
+  unique()
+
+# Create leaflet map
+pal <- colorNumeric(palette = c("lightskyblue", "mediumblue"),
+                    domain = leaflet_data$n_hood)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addCircleMarkers(
+    leaflet_data$avg_hood_lon, leaflet_data$avg_hood_lat,
+    color = pal(leaflet_data$n_hood),
+    radius = 2.5
+  ) %>%
+  addLabelOnlyMarkers(
+    leaflet_data$avg_hood_lon, leaflet_data$avg_hood_lat,
+    label = as.character(leaflet_data$n_hood),
+    labelOptions = labelOptions(
+      noHide = TRUE, textOnly = TRUE, direction = "top",
+      style = list(
+        "font-size" = "13px",
+        "color" = "black")
+    )
+  ) %>% 
+  addLegend("bottomleft", pal = pal, values = leaflet_data$n_hood,
+    title = "# of break/enters</br>per neighborhood",
+    opacity = .75
+  )
+```
+
+### *Summary*
+
+The first map shows that most break and enters occurred near the waterfront in the downtown area, which is consistent with the results in the previous part. Similarly, the leaflet map shows that the highest counts of break and enters occur in the downtown area.
+
+Overall, most break and enters reported in Toronto occurred during fall in the downtown area.
