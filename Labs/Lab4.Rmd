@@ -1,0 +1,186 @@
+---
+title: "JSC370H1 - Lab 04"
+output:
+  html_document:
+    html_preview: false
+link-citations: yes
+---
+
+This lab assignment focuses on data visualization using graphs and maps.
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+# rm(list=ls())
+
+# Load libraries and packages
+# install.packages(c("data.table","leaflet"))
+install.packages('R.utils')
+install.packages('Hmisc')
+library(data.table)
+library(leaflet)
+library(tidyverse)
+
+# Read in the file
+if (!file.exists("met_all_2023.gz"))
+  download.file("https://raw.githubusercontent.com/JSC370/JSC370-2024/main/data/met_all_2023.gz", destfile = "met_all_2023.gz")
+met <- data.table::fread("met_all_2023.gz")
+
+# Adjust the variables
+met$lat <- met$lat/1000
+met$lon <- met$lon/1000
+met$wind.sp <- met$wind.sp/10
+met$temp <- met$temp/10
+met$dew.point <- met$dew.point/10
+met$atm.press <- met$atm.press/10
+met$rh <- 100*((112-0.1*met$temp+met$dew.point)/(112+0.9*met$temp))^8
+```
+
+```{r}
+# Remove observations with temperatures below 10 degrees
+met <- met[met$temp > 10]
+
+# Keep only the observations of the first week of the month
+met <- met[met$day < 8]
+
+# Creating new variables and keeping one observation per station
+met_avg <- met %>% 
+  group_by(USAFID) %>% 
+  mutate(
+    mean_temp = mean(temp, na.rm=TRUE),
+    mean_rh = mean(rh, na.rm=TRUE),
+    mean_wind_sp = mean(wind.sp, na.rm=TRUE),
+    mean_vis_dist = mean(vis.dist, na.rm=TRUE),
+    mean_dew_point = mean(dew.point, na.rm=TRUE),
+    mean_lat = mean(lat, na.rm=TRUE),
+    mean_lon = mean(lon, na.rm=TRUE),
+    mean_elev = mean(elev, na.rm=TRUE)
+  ) %>% 
+  ungroup() %>% 
+  mutate(elev_cat = case_when(elev > 252 ~ 'High',
+                              elev <= 252 ~ 'Low'),
+         region = case_when(lon < -98 & lat < 39.71 ~ 'SW',
+                            lon >= -98 & lat < 39.71 ~ 'SE',
+                            lon < -98 & lat >= 39.71 ~ 'NW',
+                            lon >= -98 & lat >= 39.71 ~ 'NE')) %>% 
+  filter(!is.na(region) & !is.na(elev)) %>% 
+  select(USAFID, mean_temp, mean_rh, mean_wind_sp,
+         mean_vis_dist, mean_dew_point, mean_lat, 
+         mean_lon, mean_elev, elev_cat, region) %>% 
+  distinct()
+```
+
+## 1.
+
+```{r}
+# Use geom_violin() to examine the wind speed and dew point temperature by region
+ggplot(met_avg, aes(x=1, y=mean_wind_sp)) + 
+  geom_violin(na.rm=TRUE) + 
+  facet_grid(cols=vars(region)) + 
+  labs(title="Distribution of mean wind speed by region", 
+       x="Region", 
+       y="Mean wind speed") + 
+  theme_minimal()
+
+ggplot(met_avg, aes(x=1, y=mean_dew_point)) + 
+  geom_violin(na.rm=TRUE) + 
+  facet_grid(cols=vars(region)) + 
+  labs(title="Distribution of mean dew point temperature by region", 
+       x="Region", 
+       y="Mean dew point temperature") + 
+  theme_minimal()
+```
+
+From the graphs, I observe that the SW and NW regions have the highest mean wind speeds, while the SE region has the lowest. Moreover, the SW region has a significantly wider distribution of outliers, with the maximum reaching a value of 10. For the mean dew point temperature, I observe that the SE region has the highest mean dew point temperatures, while it also has outliers down to around negative 27 degrees Celsius. Disregarding outliers, the SW region has the widest distribution of these temperature values.
+
+## 2.
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+# Use geom_jitter() to examine the association between dew point temperature and wind speed by region
+ggplot(met_avg, aes(x=mean_dew_point, y=mean_wind_sp, col=region)) +
+  geom_jitter(na.rm=TRUE) + 
+  stat_smooth(method='lm') + 
+  labs(title="The association between mean dew point temperature and wind speed by region", 
+       x="Mean dew point temperature", 
+       y="Mean wind speed") + 
+  theme_minimal()
+```
+
+According to the regression lines, for the SE and NW regions, mean wind speed increases as mean dew point temperature increases. For the other two regions, mean wind speed decreases as mean dew point temperature increases. However, the slope of all four regression lines are not particularly steep, indicating that the relation between the variables is likely weak. Indeed, the scattered points themselves appear to be somewhat randomly dispersed along the y axis, further supporting a weak relation between the variables.
+
+## 3.
+
+```{r}
+# Use geom_bar() to create barplots of the weather stations by elevation category colored by region
+ggplot(met_avg, aes(x=elev_cat, fill=region)) + 
+  geom_bar(position="dodge", na.rm = TRUE) + 
+  scale_fill_brewer(palette="Accent") + 
+  labs(title="Count of stations by elevation category and region", 
+       x="Elevation category (cutoff = 252 m)", 
+       y="Count", 
+       fill="Region") + 
+  theme_minimal()
+```
+
+The SE region has the highest number of stations in the low elevation category, while the NE region has the highest number for the high elevation category. This is expected since the southeast of the country contains mainly plains and fields which are close to sea elevation, while the northwest of the country contains mountain ranges such as the Rocky Mountains, which might have many weather stations for scientific purposes.
+
+## 4.
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+# Use stat_summary() to examine mean dew point and wind speed by region
+met_avg %>% 
+  ggplot(aes(x=region, y=mean_dew_point)) + 
+  stat_summary(fun.data="mean_sdl", na.rm=TRUE) + 
+  stat_summary(fun.data="mean_sdl", geom="errorbar") + 
+  labs(title="Mean dew point temperature and two standard deviation error bars per region", 
+       x="Region", 
+       y="Dew point temperature")
+
+met_avg %>% 
+  ggplot(aes(x=region, y=mean_wind_sp)) + 
+  stat_summary(fun.data="mean_sdl", na.rm=TRUE) + 
+  stat_summary(fun.data="mean_sdl", geom="errorbar") + 
+  labs(title="Mean wind speed and two standard deviation error bars per region", 
+       x="Region", 
+       y="Dew wind speed")
+```
+
+The mean of mean dew point temperature is highest for the SE region and lowest for SW. The SW region has the widest error bars of all regions, indicating large variation in its temperature values.
+
+The mean of mean wind speed is highest for the SW region and lowest for the SE region. The SW region, again,has the widest error bars. This is reasonable since the region is predominantly desert and dry, meaning that wind speed and temperature likely fluctuates greatly. Overall, the range of wind speeds for all four regions overlap significantly, more so than for dew point temperature.
+
+## 5.
+
+```{r, message=FALSE}
+# Leaflet map showing the spatial trend in relative humidity
+pal <- colorNumeric(palette = c("green", "blue"), domain = met_avg$mean_rh)
+
+markers <- met_avg %>% 
+  arrange(desc(mean_rh)) %>% 
+  top_n(10, mean_rh)
+
+met_avg %>% 
+  filter(!is.na(mean_rh)) %>% 
+  leaflet() %>% 
+  addTiles() %>% 
+  addCircles(lng=~mean_lon, lat=~mean_lat, color=~pal(mean_rh)) %>% 
+  addLegend("bottomleft", pal = pal, values = ~mean_rh,
+            title = "Mean relative humidity (%)", opacity = 1) %>% 
+  addMarkers(lng=markers$mean_lon, lat=markers$mean_lat)
+```
+
+Mean relative humidity is highest on the coasts of California (SW region) and the SE region, plus a narrow stretch of regions in Texas and upwards. It is lowest in the desert areas of California, New Mexico, and neighboring states (SW region). The Great Lakes region has moderate relative humidity (around 50%). The top ten humid stations are mostly located on a coast, with the notable exception of a station in New Mexico.
+
+## 6.
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+# Using the ggtech library
+devtools::install_github("ricardo-bion/ggtech", dependencies=TRUE)
+library(ggtech)
+
+qplot(data = met_avg, x = mean_wind_sp, geom = "histogram", 
+      bins=30, fill = region) + 
+  labs(title="Distribution of mean wind speed per region", 
+       x="Mean wind speed", 
+       y="Count")
+```
+
+I used the library ggtech with the qplot function. In this plot, I can see that the mean wind speed (on the x-axis) is lowest for the SE region, while highest for the SW region. This confirms with my plot in question 3, which showed that the SW region has the highest mean wind speed, while the SE region has the lowest. Moreover, when taking into account all four regions, the mode of the mean wind speed is around 3.0 units, which is lower than the mode of the mean wind speed for the SW region.
