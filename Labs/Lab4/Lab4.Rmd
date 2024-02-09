@@ -1,8 +1,8 @@
 ---
-title: "JSC370H1 - Lab 04"
+title: "JSC370H1 - Lab 4"
 output:
   html_document:
-    html_preview: false
+    theme: readable
 link-citations: yes
 ---
 
@@ -68,7 +68,7 @@ met_avg <- met %>%
   distinct()
 ```
 
-## 1.
+# Part 1
 
 ```{r}
 # Use geom_violin() to examine the wind speed and dew point temperature by region
@@ -91,7 +91,7 @@ ggplot(met_avg, aes(x=1, y=mean_dew_point)) +
 
 From the graphs, I observe that the SW and NW regions have the highest mean wind speeds, while the SE region has the lowest. Moreover, the SW region has a significantly wider distribution of outliers, with the maximum reaching a value of 10. For the mean dew point temperature, I observe that the SE region has the highest mean dew point temperatures, while it also has outliers down to around negative 27 degrees Celsius. Disregarding outliers, the SW region has the widest distribution of these temperature values.
 
-## 2.
+# Part 2
 
 ```{r, error=FALSE, message=FALSE, warning=FALSE}
 # Use geom_jitter() to examine the association between dew point temperature and wind speed by region
@@ -106,7 +106,7 @@ ggplot(met_avg, aes(x=mean_dew_point, y=mean_wind_sp, col=region)) +
 
 According to the regression lines, for the SE and NW regions, mean wind speed increases as mean dew point temperature increases. For the other two regions, mean wind speed decreases as mean dew point temperature increases. However, the slope of all four regression lines are not particularly steep, indicating that the relation between the variables is likely weak. Indeed, the scattered points themselves appear to be somewhat randomly dispersed along the y axis, further supporting a weak relation between the variables.
 
-## 3.
+# Part 3
 
 ```{r}
 # Use geom_bar() to create barplots of the weather stations by elevation category colored by region
@@ -122,7 +122,7 @@ ggplot(met_avg, aes(x=elev_cat, fill=region)) +
 
 The SE region has the highest number of stations in the low elevation category, while the NE region has the highest number for the high elevation category. This is expected since the southeast of the country contains mainly plains and fields which are close to sea elevation, while the northwest of the country contains mountain ranges such as the Rocky Mountains, which might have many weather stations for scientific purposes.
 
-## 4.
+# Part 4
 
 ```{r, error=FALSE, message=FALSE, warning=FALSE}
 # Use stat_summary() to examine mean dew point and wind speed by region
@@ -147,7 +147,7 @@ The mean of mean dew point temperature is highest for the SE region and lowest f
 
 The mean of mean wind speed is highest for the SW region and lowest for the SE region. The SW region, again,has the widest error bars. This is reasonable since the region is predominantly desert and dry, meaning that wind speed and temperature likely fluctuates greatly. Overall, the range of wind speeds for all four regions overlap significantly, more so than for dew point temperature.
 
-## 5.
+# Part 5
 
 ```{r, message=FALSE}
 # Leaflet map showing the spatial trend in relative humidity
@@ -169,7 +169,7 @@ met_avg %>%
 
 Mean relative humidity is highest on the coasts of California (SW region) and the SE region, plus a narrow stretch of regions in Texas and upwards. It is lowest in the desert areas of California, New Mexico, and neighboring states (SW region). The Great Lakes region has moderate relative humidity (around 50%). The top ten humid stations are mostly located on a coast, with the notable exception of a station in New Mexico.
 
-## 6.
+# Part 6
 
 ```{r, error=FALSE, message=FALSE, warning=FALSE}
 # Using the ggtech library
