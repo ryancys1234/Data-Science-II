@@ -1,0 +1,273 @@
+---
+title: "JSC370H1 - Assignment 2"
+output: 
+  html_document:
+    theme: readable
+---
+
+### Midterm / Final Project
+
+### Data Wrangling
+
+```{r, include=FALSE}
+# rm(list=ls())
+install.packages("kableExtra")
+library(dplyr)
+library(tidyr)
+library(kableExtra)
+library(ggplot2)
+library(mgcv)
+```
+
+```{r, message=FALSE}
+life_expectancy <- read.csv("life-expectancy-of-women-vs-life-expectancy-of-men.csv", header=TRUE)
+alcohol_consumption <- read.csv("WHOAlcoholTotalPerCapita_2021-09-20v2.csv", header=TRUE)
+
+# Reshape the life expectancy data to have 'Sex' and 'Life_expectancy' columns
+life_expectancy <- life_expectancy |> 
+  rename(Country = Entity,
+         Female = Life.expectancy...Sex..female...Age..at.birth...Variant..estimates,
+         Male = Life.expectancy...Sex..male...Age..at.birth...Variant..estimates,
+         Population = Population...Sex..all...Age..all...Variant..estimates) |> 
+  pivot_longer(cols=c(Female, Male),
+               names_to='Sex',
+               values_to='Life_expectancy') |> 
+  select(Country, Year, Sex, Life_expectancy, Population)
+
+# Exclude rows labelled as 'Both sexes' in the alcohol consumption data
+alcohol_consumption <- alcohol_consumption |> 
+  filter(Sex != 'Both sexes') |> 
+  rename(Consumption = Alcohol.total.per.capita..15...consumption.in.liters..numeric.,
+         Low_Consumption = Alcohol.total.per.capita..15...consumption.in.liters..low.estimation.,
+         High_Consumption = Alcohol.total.per.capita..15...consumption.in.liters..high.estimation.) |> 
+  select(Country, Year, Sex, Consumption, Low_Consumption, High_Consumption)
+
+# Join datasets
+df <- inner_join(
+  x = life_expectancy,
+  y = alcohol_consumption,
+  by = c("Country", "Year", "Sex")
+)
+
+# Summary table using the kableExtra package
+df |> 
+  group_by(Year, Sex) %>%
+  summarise(
+    mean_life_expectancy = mean(Life_expectancy),
+    sd_life_expectancy = sd(Life_expectancy),
+    mean_alcohol_consumption = mean(Consumption),
+    sd_alcohol_consumption = sd(Consumption)
+  ) |> 
+  kbl() |> 
+  kable_styling(full_width = TRUE) |> 
+  scroll_box(height = "500px")
+```
+
+```{r, message=FALSE}
+# Categorize consumption level as 'low', 'medium', 'high'
+quartiles <- df |> 
+  group_by(Sex) |> 
+  summarise(
+    q1 = quantile(Consumption, probs = 0.25),
+    q3 = quantile(Consumption, probs = 0.75)
+  )
+
+df <- df |> 
+  mutate(Level = case_when(
+    Sex == 'Female' & Consumption <= quartiles$q1[1] ~ 'low',
+    Sex == 'Female' & Consumption > quartiles$q1[1] & Consumption <= quartiles$q3[1] ~ 'medium',
+    Sex == 'Female' & Consumption > quartiles$q3[1] ~ 'high',
+    Sex == 'Male' & Consumption <= quartiles$q1[2] ~ 'low',
+    Sex == 'Male' & Consumption > quartiles$q1[2] & Consumption <= quartiles$q3[2] ~ 'medium',
+    Sex == 'Male' & Consumption > quartiles$q3[2] ~ 'high',
+    TRUE ~ NA
+  ))
+
+df |> 
+  group_by(Sex, Level) |> 
+  summarise(
+    min_alcohol_consumption = min(Consumption),
+    max_alcohol_consumption = max(Consumption),
+    num_observations = n()
+  ) |> 
+  kbl() |> 
+  kable_styling(full_width = TRUE)
+```
+
+### Looking at the data
+
+```{r}
+head(df) |> 
+  kbl() |> 
+  kable_styling(full_width = TRUE) |> 
+  scroll_box(width = "910px")
+
+df |> 
+  select(Life_expectancy, Population, Consumption, Low_Consumption, High_Consumption) |> 
+  summary()
+
+df |> 
+  ggplot(aes(x = Consumption, y = Life_expectancy, color = Level)) +
+  geom_point(size = .5) +
+  facet_grid(cols = vars(Sex), scales="free") +
+  labs(title = "Life expectancy vs alcohol consumption by consumption level and sex",
+       y = "Life expectancy") +
+  theme_minimal()
+
+df |> 
+  ggplot(aes(x = Year, y = Life_expectancy)) +
+  geom_point(size = .5, alpha = .25) +
+  labs(title = "Life expectancy by year",
+       y = "Life expectancy") +
+  theme_minimal()
+
+df |> 
+  ggplot(aes(x = Year, y = Consumption)) +
+  geom_point(size = .5, alpha = .25) +
+  labs(title = "Alcohol consumption by year") +
+  theme_minimal()
+```
+
+The merged dataset has ``r dim(df)[1]`` observations and ``r dim(df)[2]`` variables of types character, int, and double. Of the numeric variables, from which I extracted summaries, none appears to contain any invalid or implausible values. There are ``r sum(is.na(df))`` missing observations.
+
+For the question "What is the association between life expectancy and alcohol consumption?", I plotted a scatterplot of alcohol consumption vs life expectancy separated by sex and consumption level, which shows that the relationship between the variables (if any) is non-linear. While there are no obvious patterns in the low and medium consumption levels, there seems to be a downward trend in the relationship for the high consumption level, suggesting that life expectancy may decrease as consumption increases for this level.
+
+For the question "Does this association differ by Sex?", using the same scatterplot, I notice that the downward trend is less steep in women with high consumption levels compared to men in the same category. There does not seem to be any other differences in the association between the sexes.
+
+Finally, for the question "How has life expectancy and alcohol consumption changed over time?", I plotted scatterplots for both variables over time, which show that life expectancy has generally increased while alcohol consumption has largely stayed constant from 2000 to 2019.
+
+### Visualization
+
+```{r, message=FALSE, warning=FALSE}
+df |> 
+  ggplot(aes(x = Consumption, fill = Sex)) +
+  geom_histogram(position = "identity", bins = 20, alpha = 0.5) +
+  scale_fill_manual(values = c("#1f78b4", "#33a02c"), name = "Sex") +
+  labs(title = "Stacked histogram of alcohol consumption by sex",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r, message=FALSE, warning=FALSE}
+df |> 
+  filter(Year %in% c(2000, 2010, 2019)) |> 
+  ggplot(aes(x = Consumption, y = Life_expectancy)) +
+  geom_point(color = "#33a02c", size = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~Year, nrow = 1, scales="free") +
+  labs(title = "Life expectancy vs alcohol consumption by year",
+       y = "Life expectancy") +
+  theme_minimal()
+```
+
+```{r}
+ca_data <- df |> filter(Country == 'Canada')
+ro_data <- df |> filter(Country == 'Romania')
+summary(lm(Life_expectancy ~ Year + Sex, data = ca_data))
+summary(lm(Life_expectancy ~ Year + Sex, data = ro_data))
+```
+
+```{r, message=FALSE}
+df |>
+  filter(Year == 2000) |>
+  group_by(Country, Sex) |>
+  summarise(mean_life_expectancy = mean(Life_expectancy)) |>
+  spread(key = Sex, value = mean_life_expectancy) |>
+  ungroup() |> 
+  slice_max(order_by = abs(Female - Male), n = 10) |> 
+  gather(key = Sex, value = mean_life_expectancy, Female:Male) |> 
+  ggplot(aes(x = Sex, y = mean_life_expectancy, fill = Sex)) +
+  geom_bar(stat = 'identity') +
+  facet_wrap(~Country, nrow = 1) +
+  scale_fill_discrete(guide = "none") +
+  labs(title = "Mean life expectancy by sex for the 10 countries with largest discrepancies (2000)",
+       y = "Mean life expectancy") +
+  theme_minimal()
+
+df |>
+  filter(Year == 2019) |>
+  group_by(Country, Sex) |>
+  summarise(mean_life_expectancy = mean(Life_expectancy)) |>
+  spread(key = Sex, value = mean_life_expectancy) |>
+  ungroup() |> 
+  slice_max(order_by = abs(Female - Male), n = 10) |> 
+  gather(key = Sex, value = mean_life_expectancy, Female:Male) |> 
+  ggplot(aes(x = Sex, y = mean_life_expectancy, fill = Sex)) +
+  geom_bar(stat = 'identity') +
+  facet_wrap(~Country, nrow = 1) +
+  scale_fill_discrete(guide = "none") +
+  labs(title = "Mean life expectancy by sex for the 10 countries with largest discrepancies (2019)",
+       y = "Mean life expectancy") +
+  theme_minimal()
+```
+
+```{r}
+df |> 
+  filter(Year == 2019) |> 
+  ggplot(aes(x = Level, y = Life_expectancy, fill = Sex)) +
+  geom_boxplot() +
+  labs(title = "Life expectancy by alcohol consumption level and sex (2019)",
+       x = "Alcohol consumption level",
+       y = "Life expectancy") +
+  theme_minimal()
+```
+
+```{r, message=FALSE}
+df |> 
+  group_by(Year, Sex) |> 
+  summarise(mean_life_expectancy = mean(Life_expectancy)) |> 
+  ungroup() |> 
+  ggplot(aes(x = Year, y = mean_life_expectancy, color = Sex)) +
+  geom_point() +
+  labs(title = "Mean life expectancy by sex over time",
+       x = "Year",
+       y = "Mean life expectancy") +
+  theme_minimal()
+
+df |> 
+  group_by(Year, Sex) |> 
+  summarise(mean_alcohol_consumption = mean(Consumption)) |> 
+  ungroup() |> 
+  ggplot(aes(x = Year, y = mean_alcohol_consumption, color = Sex)) +
+  geom_point() +
+  labs(title = "Mean alcohol consumption by sex over time",
+       x = "Year",
+       y = "Mean alcohol consumption") +
+  theme_minimal()
+```
+
+### Advanced Regression
+
+```{r}
+summary(lm(Life_expectancy ~ Level + scale(Population) + Year + Sex, data = df))
+spline_fit <- gam(Life_expectancy ~ Level + s(scale(Population), bs = "cr", k = 4) + Year + Sex, data = df)
+summary(spline_fit)
+```
+
+```{r}
+plot(spline_fit)
+```
+
+```{r, message=FALSE}
+df2 <- df |> 
+  group_by(Country, Sex) |> 
+  summarise(mean_consumption = mean(Consumption),
+            mean_life_expectancy = mean(Life_expectancy),
+            Population = mean(Population))
+
+summary(lm(mean_life_expectancy ~ mean_consumption + scale(Population) + Sex, data = df2))
+summary(gam(mean_life_expectancy ~ mean_consumption + s(Population, bs = "cr", k = 4) + Sex, data = df2))
+```
+
+```{r, message=FALSE}
+df2 |> 
+  ggplot(aes(x = mean_consumption, y = mean_life_expectancy, color = Sex)) +
+  geom_point() +
+  geom_smooth(method = "lm", fill = NA) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Mean alcohol consumption vs mean life expectancy by sex",
+       x = "Mean alcohol consumption",
+       y = "Mean life expectancy") +
+  theme_minimal()
+```
+
