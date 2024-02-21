@@ -1,0 +1,210 @@
+---
+title: "JSC370H1 - Lab 5"
+output:
+  html_document:
+    theme: readable
+---
+
+```{r, warnings=FALSE, message=FALSE, error=FALSE}
+# rm(list=ls())
+install.packages('R.utils')
+install.packages("kableExtra")
+library(data.table)
+library(dtplyr)
+library(dplyr)
+library(mgcv)
+library(ggplot2)
+library(leaflet)
+library(kableExtra)
+```
+
+```{r, message=FALSE, warnings=FALSE}
+fn <- "https://raw.githubusercontent.com/JSC370/JSC370-2024/main/data/met_all_2023.gz"
+if (!file.exists("met_all_2023.gz"))
+  download.file(fn, destfile = "met_all_2023.gz")
+met <- data.table::fread("met_all_2023.gz")
+
+met$lat <- met$lat/1000
+met$lon <- met$lon/1000
+met$wind.sp <- met$wind.sp/10
+met$temp <- met$temp/10
+met$dew.point <- met$dew.point/10
+met$atm.press <- met$atm.press/10
+met$rh <- 100*((112-0.1*met$temp+met$dew.point)/(112+0.9*met$temp))^8
+met <- na.omit(met)
+```
+
+```{r, error=FALSE, warning=FALSE, message=FALSE}
+# Download the data
+stations <- fread("ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.csv")
+stations[, USAF := as.integer(USAF)]
+
+# Dealing with NAs and 999999
+stations[, USAF   := fifelse(USAF == 999999, NA_integer_, USAF)]
+stations[, CTRY   := fifelse(CTRY == "", NA_character_, CTRY)]
+stations[, STATE  := fifelse(STATE == "", NA_character_, STATE)]
+
+# Selecting the three relevant columns, and keeping unique records
+stations <- unique(stations[, list(USAF, CTRY, STATE, LAT, LON)])
+
+# Dropping NAs
+stations <- stations[!is.na(USAF)]
+
+# Removing duplicates
+stations[, n := 1:.N, by = .(USAF)]
+stations <- stations[n == 1,][, n := NULL]
+```
+
+```{r, message=FALSE, warnings=FALSE}
+met_2 <- merge(
+  x     = met,
+  y     = stations,
+  by.x  = "USAFID",
+  by.y  = "USAF",
+  all.x = TRUE,
+  all.y = FALSE
+  )
+```
+
+# Part 1
+
+```{r}
+quantile(met_2$temp, na.rm=TRUE)["50%"]
+quantile(met_2$wind.sp, na.rm=TRUE)["50%"]
+quantile(met_2$atm.press, na.rm=TRUE)["50%"]
+```
+```{r}
+station_med <- met_2[, .(
+  temp_ID=quantile(temp, probs=.5,na.rm=TRUE),
+  wind.sp_ID=quantile(wind.sp, probs=.5,na.rm=TRUE),
+  atm.press_ID=quantile(atm.press, probs=.5,na.rm=TRUE),
+  lat=quantile(lat, probs=.5,na.rm=TRUE),
+  lon=quantile(lon,probs=.5,na.rm=TRUE)
+), by=list(USAFID,STATE)]
+
+station_med[, temp_dist:=abs(temp_ID-21.7)]
+median_temp_stations <- station_med[temp_dist==0]
+
+station_med[, wind.sp_dist:=abs(wind.sp_ID-3.1)]
+median_wind.sp_stations <- station_med[wind.sp_dist==0]
+
+station_med[, atm.press_dist:=abs(atm.press_ID-1011.7)]
+median_atm.press_stations <- station_med[atm.press_dist==0]
+
+station_med[atm.press_dist== 0 & wind.sp_dist==0 & temp_dist==0]
+```
+
+The station with USAFID 723119 has all three median values (or have values closest to them).
+
+# Part 2
+
+```{r}
+euc <- function(a, b, c, d) sqrt((a - b)^2 + (c - d)^2)
+
+station_med_state <- met_2[, .(
+  temp_ID_state=quantile(temp, probs=.5,na.rm=TRUE),
+  wind.sp_ID_state=quantile(wind.sp, probs=.5,na.rm=TRUE),
+  atm.press_ID_state=quantile(atm.press, probs=.5,na.rm=TRUE)
+), by=STATE]
+
+merged <- merge(
+  x     = station_med,
+  y     = station_med_state,
+  by.x  = "STATE",
+  by.y  = "STATE",
+  all.x = TRUE,
+  all.y = TRUE
+)
+
+merged[, dist:=euc(temp_ID, temp_ID_state, wind.sp_ID, wind.sp_ID_state)]
+median_euc_stations <- merged[ , .SD[which.min(dist)], by = STATE]
+
+median_euc_stations[, c("STATE", "USAFID")]
+```
+
+Shown about are the representative stations per state according to the smallest Euclidean distance between their median temperature and wind speed and the state medians.
+
+# Part 3
+
+```{r}
+station_med_2 <- met_2[, .(
+  lat_med=quantile(lat, probs=.5,na.rm=TRUE),
+  lon_med=quantile(lon, probs=.5,na.rm=TRUE)
+), by=STATE]
+
+merged_2 <- merge(
+  x=met_2[, c("USAFID", "STATE", "lat", "lon")],
+  y=station_med_2,
+  by.x="STATE",
+  by.y="STATE",
+  all.x=TRUE,all.y=TRUE
+)
+
+merged_2[, temp_dist:=sqrt((lat-lat_med)^2+(lon-lon_med)^2)]
+median_coor_stations <- merged_2[ , .SD[which.min(temp_dist)], by = STATE]
+```
+
+```{r}
+leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>% 
+  addCircles(lng=median_coor_stations$lon, lat=median_coor_stations$lat, color="blue") %>% 
+  addCircles(lng=median_euc_stations$lon, lat=median_euc_stations$lat, color="red")
+```
+
+# Part 4
+
+```{r}
+met_2 <- met_2 %>% 
+  mutate(elev_cat = case_when(elev < 93 ~ "Low",
+                              elev >= 93 & elev < 401 ~ "Mid",
+                              elev >= 401 ~ "High"))
+
+low_mean_temp <- met_2 %>% 
+  filter(elev_cat == "Low") %>% 
+  group_by(STATE) %>% 
+  summarize(low_mean_temp = mean(temp))
+
+mid_mean_temp <- met_2 %>% 
+  filter(elev_cat == "Mid") %>% 
+  group_by(STATE) %>% 
+  summarize(mid_mean_temp = mean(temp))
+
+high_mean_temp <- met_2 %>% 
+  filter(elev_cat == "High") %>% 
+  group_by(STATE) %>% 
+  summarize(high_mean_temp = mean(temp))
+
+merged_3 <- merge(x=low_mean_temp,y=mid_mean_temp,by="STATE", all=TRUE)
+merged_3 <- merge(x=merged_3,y=high_mean_temp,by="STATE", all=TRUE)
+merged_3 %>% kbl()
+```
+
+# Part 5
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+med_ldt <- lazy_dt(station_med, immutable=FALSE) %>% 
+  filter(atm.press_ID >= 1000 & atm.press_ID <= 1020) %>% 
+  collect()
+
+ggplot(med_ldt, aes(x=atm.press_ID, y=temp_ID)) + 
+  geom_point(show_guide = FALSE) + 
+  geom_smooth(method='lm') + 
+  geom_smooth(method = loess, aes(color="red")) + 
+  labs(x="Atmospheric pressure",
+       y="Temperature", 
+       title="The association between temperature and atmospheric pressure") +
+  guides(color="none") +
+  theme_minimal()
+```
+
+```{r}
+fit1 <- lm(data=med_ldt, temp_ID ~ wind.sp_ID)
+summary(fit1)
+plot(data=med_ldt, temp_ID ~ wind.sp_ID)
+abline(fit1)
+
+fit2 <- gam(temp_ID ~ s(wind.sp_ID, bs="cr", k=4), data=med_ldt)
+summary(fit2)
+plot(fit2)
+```
+
+The GAM model is the better fit, since its adjusted R squared value (0.0245), while low, is better than that of the linear model (0.005783). I graphed the cubic regression GAM with 4 knots and while it fits the points poorly, it manages to capture some of the vertical patterns in the points.

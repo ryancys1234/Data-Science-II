@@ -1,0 +1,127 @@
+---
+title: "JSC370H1 - Lab 6"
+output:
+  html_document:
+    theme: readable
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE)
+```
+
+```{r, include=FALSE}
+install.packages("kableExtra")
+library(kableExtra)
+```
+
+# Part 1
+
+```{r counter-pubmed}
+# Downloading the website
+website <- xml2::read_html("https://pubmed.ncbi.nlm.nih.gov/?term=sars-cov-2")
+
+# Finding the counts
+counts <- xml2::xml_find_first(website, "//span[@class='value']")
+
+# Turning it into text
+counts <- as.character(counts)
+
+# Extracting the data using regex
+counts <- stringr::str_extract(counts, "[0-9,]{7}")
+```
+
+There are ``r counts`` SARS-CoV-2 papers.
+
+# Part 2
+
+```{r papers-covid-toronto}
+library(httr)
+query_ids <- GET(
+  url   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+  query = list(db = "pubmed", term = "covid19 toronto", retmax = 300)
+)
+
+# Extracting the content of the response of GET
+ids <- httr::content(query_ids)
+```
+
+# Part 3
+
+```{r get-ids}
+# Turn the result into a character vector
+ids <- as.character(ids)
+
+# Find all the ids 
+ids <- stringr::str_extract_all(ids, "<Id>[0-9]+</Id>")[[1]]
+
+# Remove all the leading and trailing <Id> </Id>. Make use of "|"
+ids <- stringr::str_remove_all(ids, "<Id>|</Id>")
+```
+    
+```{r get-abstracts}
+publications <- GET(
+  url   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+  query = list(
+    db = "pubmed",
+    id = paste(ids, collapse = ','),
+    retmax = 300,
+    rettype = "abstract"
+    )
+)
+
+# Turning the output into character vector
+publications <- httr::content(publications)
+publications_txt <- as.character(publications)
+```
+
+# Part 4
+
+```{r univ-institute-regex}
+institution <- stringr::str_extract_all(
+  publications_txt,
+  "University of [A-Za-z]+|[A-Za-z]+ Institute of [A-Za-z]+"
+  ) 
+institution <- unlist(institution)
+institutions <- data.frame(table(institution))
+colnames(institutions) <- "Institutions"
+kableExtra::scroll_box(knitr::kable(institutions), height="500px", width="910px")
+```
+
+```{r school-department}
+schools_and_deps <- stringr::str_extract_all(
+  publications_txt,
+  "School of [A-Za-z]+|Department of [A-Za-z]+"
+  )
+schools_and_deps <- data.frame(table(schools_and_deps))
+colnames(schools_and_deps) <- "Institutions"
+kableExtra::scroll_box(knitr::kable(schools_and_deps), height="500px", width="910px")
+```
+
+# Part 5
+
+```{r one-string-per-response}
+pub_char_list <- xml2::xml_children(publications)
+pub_char_list <- sapply(pub_char_list, as.character)
+```
+
+```{r extracting-last-bit}
+abstracts <- stringr::str_extract(pub_char_list, "<AbstractText>.*</AbstractText>")
+abstracts <- stringr::str_remove_all(abstracts, "<AbstractText>|</AbstractText>")
+abstracts <- stringr::str_replace_all(abstracts, "\\s+", " ")
+abstracts <- stringr::str_remove_all(abstracts, "\\n|^ +| +$")
+```
+
+``r sum(is.na(abstracts))`` papers don't have an abstract.
+
+```{r process-titles}
+titles <- stringr::str_extract(pub_char_list, "<ArticleTitle>.*</ArticleTitle>")
+titles <- stringr::str_remove_all(titles, "<ArticleTitle>|</ArticleTitle>")
+```
+
+``r sum(is.na(titles))`` don't have a title.
+
+```{r build-db}
+database <- data.frame(titles, abstracts)
+colnames(database) <- c("Titles", "Abstracts")
+kableExtra::scroll_box(knitr::kable(database), height="500px", width="910px")
+```
