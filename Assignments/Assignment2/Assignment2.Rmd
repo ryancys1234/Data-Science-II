@@ -128,6 +128,8 @@ df |>
   theme_minimal()
 ```
 
+#### Summary
+
 The merged dataset has ``r dim(df)[1]`` observations and ``r dim(df)[2]`` variables of types character, int, and double. Of the numeric variables, from which I extracted summaries, none appears to contain any invalid or implausible values. There are ``r sum(is.na(df))`` missing observations.
 
 For the question "What is the association between life expectancy and alcohol consumption?", I plotted a scatterplot of alcohol consumption vs life expectancy separated by sex and consumption level, which shows that the relationship between the variables (if any) is non-linear. While there are no obvious patterns in the low and medium consumption levels, there seems to be a downward trend in the relationship for the high consumption level, suggesting that life expectancy may decrease as consumption increases for this level.
@@ -148,6 +150,8 @@ df |>
   theme_minimal()
 ```
 
+The graph shows that females generally drink less than males. For the female group, most per capita consumption per year is near 0 liters, with the highest around 10 liters. For the male group, the distribution is much more spread out, with some per capita consumption reaching around 30 liters.
+
 ```{r, message=FALSE, warning=FALSE}
 df |> 
   filter(Year %in% c(2000, 2010, 2019)) |> 
@@ -160,6 +164,8 @@ df |>
   theme_minimal()
 ```
 
+The graph shows that consumption correlated more with life expectancy in 2000 compared to the other years. However, the patterns between the years are overall similar, and they show that life expectancy increases as consumption increases, which is a rather surprising pattern given the health risks associated with alcohol.
+
 ```{r}
 ca_data <- df |> filter(Country == 'Canada')
 ro_data <- df |> filter(Country == 'Romania')
@@ -167,39 +173,30 @@ summary(lm(Life_expectancy ~ Year + Sex, data = ca_data))
 summary(lm(Life_expectancy ~ Year + Sex, data = ro_data))
 ```
 
+I compared data for the countries Canada and Romania. The summaries show that for both females and males in Canada, an increase of 1 year over time correlates to an increase of 1.718e-01 years in the life expectancy, while for those in Romania, an increase of 1 year over time correlates to an increase of 0.3461 in the life expectancy. In Canada, males live 4.465 less years than females on average, while in Romania, males live 7.08 less years than females on average. Overall, the association between year and life expectancy and the difference in life expectancy between the sexes are more pronounced in Romania than Canada.
+
+The models for Canada and Romania have adjusted R-squared values of 0.9885 and 0.962 respectively, while their p-values are both below 2.2e-16. While the former model has a slightly better fit, both models appear to be good fits, meaning we can be quite confident in the correlations.
+
 ```{r, message=FALSE}
 df |>
-  filter(Year == 2000) |>
-  group_by(Country, Sex) |>
+  filter(Year == 2000 | Year == 2019) |>
+  group_by(Country, Sex, Year) |>
   summarise(mean_life_expectancy = mean(Life_expectancy)) |>
   spread(key = Sex, value = mean_life_expectancy) |>
   ungroup() |> 
+  group_by(Year) |> 
   slice_max(order_by = abs(Female - Male), n = 10) |> 
   gather(key = Sex, value = mean_life_expectancy, Female:Male) |> 
-  ggplot(aes(x = Sex, y = mean_life_expectancy, fill = Sex)) +
-  geom_bar(stat = 'identity') +
-  facet_wrap(~Country, nrow = 1) +
-  scale_fill_discrete(guide = "none") +
-  labs(title = "Mean life expectancy by sex for the 10 countries with largest discrepancies (2000)",
+  ggplot(aes(x = Country, y = mean_life_expectancy, fill = Sex)) +
+  geom_bar(stat = 'identity', position = 'identity', alpha = 0.5) +
+  facet_wrap(~Year, ncol = 1) +
+  labs(title = "Mean life expectancy by sex for the countries with largest discrepancies",
        y = "Mean life expectancy") +
-  theme_minimal()
-
-df |>
-  filter(Year == 2019) |>
-  group_by(Country, Sex) |>
-  summarise(mean_life_expectancy = mean(Life_expectancy)) |>
-  spread(key = Sex, value = mean_life_expectancy) |>
-  ungroup() |> 
-  slice_max(order_by = abs(Female - Male), n = 10) |> 
-  gather(key = Sex, value = mean_life_expectancy, Female:Male) |> 
-  ggplot(aes(x = Sex, y = mean_life_expectancy, fill = Sex)) +
-  geom_bar(stat = 'identity') +
-  facet_wrap(~Country, nrow = 1) +
-  scale_fill_discrete(guide = "none") +
-  labs(title = "Mean life expectancy by sex for the 10 countries with largest discrepancies (2019)",
-       y = "Mean life expectancy") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
+
+Between both plots, there appears to be differences between the top ten countries by discrepancy in 2019 compared to 2000. For instance, Urugray disappeared and Armenia appeared in 2019. We can also see that the mean life expectancies for the countries are generally closer to 80 years in 2019 compared to 2000, which confirms an earlier observation made in the previous EDA section. As for the discrepancies themselves, they seem to be consistent across all the shown countries and years. This makes sense since increases in longevity should be similar for both sexes when considering other factors such as availability of medicine.
 
 ```{r}
 df |> 
@@ -212,13 +209,15 @@ df |>
   theme_minimal()
 ```
 
+For all three levels, females have longer life expectancies. Consistent with an earlier scatterplot, this boxplot shows that life expectancy generally increases with consumption level, which as mentioned above is a surprising conclusion. This is most apparent in the high consumption level, where the life expectancies of both males and females are significantly higher than those of the lower levels.
+
 ```{r, message=FALSE}
 df |> 
   group_by(Year, Sex) |> 
   summarise(mean_life_expectancy = mean(Life_expectancy)) |> 
   ungroup() |> 
-  ggplot(aes(x = Year, y = mean_life_expectancy, color = Sex)) +
-  geom_point() +
+  ggplot(aes(x = Year, y = mean_life_expectancy, fill = Sex)) +
+  geom_bar(stat = 'identity', position = 'identity', alpha = 0.5) +
   labs(title = "Mean life expectancy by sex over time",
        x = "Year",
        y = "Mean life expectancy") +
@@ -228,13 +227,15 @@ df |>
   group_by(Year, Sex) |> 
   summarise(mean_alcohol_consumption = mean(Consumption)) |> 
   ungroup() |> 
-  ggplot(aes(x = Year, y = mean_alcohol_consumption, color = Sex)) +
-  geom_point() +
+  ggplot(aes(x = Year, y = mean_alcohol_consumption, fill = Sex)) +
+  geom_bar(stat = 'identity', position = 'identity', alpha = 0.5) +
   labs(title = "Mean alcohol consumption by sex over time",
        x = "Year",
        y = "Mean alcohol consumption") +
   theme_minimal()
 ```
+
+The visualization I chose 
 
 ### Advanced Regression
 
@@ -251,9 +252,8 @@ plot(spline_fit)
 ```{r, message=FALSE}
 df2 <- df |> 
   group_by(Country, Sex) |> 
-  summarise(mean_consumption = mean(Consumption),
-            mean_life_expectancy = mean(Life_expectancy),
-            Population = mean(Population))
+  mutate(mean_consumption = mean(Consumption),
+         mean_life_expectancy = mean(Life_expectancy))
 
 summary(lm(mean_life_expectancy ~ mean_consumption + scale(Population) + Sex, data = df2))
 summary(gam(mean_life_expectancy ~ mean_consumption + s(Population, bs = "cr", k = 4) + Sex, data = df2))
