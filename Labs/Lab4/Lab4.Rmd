@@ -6,8 +6,6 @@ output:
 link-citations: yes
 ---
 
-This lab assignment focuses on data visualization using graphs and maps.
-
 ```{r, error=FALSE, message=FALSE, warning=FALSE}
 # rm(list=ls())
 
