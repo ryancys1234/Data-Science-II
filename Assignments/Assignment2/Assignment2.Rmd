@@ -7,9 +7,13 @@ output:
 
 ### Midterm / Final Project
 
+I will be using the datasets on Californian hospital building information and performance ratings on disease treatment from the California Health and Human Services Open Data Portal. The datasets contain information on the hospital's names, buildings (in service and under construction), affiliated health system, type of disease, cases, adverse events, as well as location information such as coordinates. I plan to investigate whether there are any associations between the location and facility availability of hospitals and their rates of adverse disease-related events.
+
 ### Data Wrangling
 
 ```{r, include=FALSE}
+# https://data.chhs.ca.gov/dataset/california-hospital-performance-ratings/resource/ad2ccbd3-01be-4dae-997f-417fde510d83
+# https://data.chhs.ca.gov/dataset/hospital-building-data/resource/d97adf28-ebaf-4204-a29e-bb6bdb7f96b9
 # rm(list=ls())
 install.packages("kableExtra")
 library(dplyr)
@@ -196,7 +200,7 @@ df |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-Between both plots, there appears to be differences between the top ten countries by discrepancy in 2019 compared to 2000. For instance, Urugray disappeared and Armenia appeared in 2019. We can also see that the mean life expectancies for the countries are generally closer to 80 years in 2019 compared to 2000, which confirms an earlier observation made in the previous EDA section. As for the discrepancies themselves, they seem to be consistent across all the shown countries and years. This makes sense since increases in longevity should be similar for both sexes when considering other factors such as availability of medicine.
+Between both plots, there appears to be differences between the top ten countries by discrepancy in 2019 compared to 2000. For instance, Urugray disappeared and Armenia appeared in 2019. We can also see that the mean life expectancies for the countries are generally closer to 80 years in 2019 compared to 2000, which confirms an earlier observation made in the previous EDA section. As for the discrepancies themselves, they seem to be consistent across all the shown countries and years. This makes sense since increases in longevity should be similar for both sexes when considering external factors such as general availability of medicine.
 
 ```{r}
 df |> 
@@ -209,9 +213,9 @@ df |>
   theme_minimal()
 ```
 
-For all three levels, females have longer life expectancies. Consistent with an earlier scatterplot, this boxplot shows that life expectancy generally increases with consumption level, which as mentioned above is a surprising conclusion. This is most apparent in the high consumption level, where the life expectancies of both males and females are significantly higher than those of the lower levels.
+For all three levels, females have longer life expectancies. Consistent with the scatterplots from earlier, this boxplot shows that life expectancy generally increases with consumption level, which as mentioned above is a surprising conclusion. This is most apparent in the high consumption level, where the life expectancies of both males and females are significantly higher than those of the lower levels.
 
-```{r, message=FALSE}
+```{r, include=FALSE}
 df |> 
   group_by(Year, Sex) |> 
   summarise(mean_life_expectancy = mean(Life_expectancy)) |> 
@@ -235,7 +239,19 @@ df |>
   theme_minimal()
 ```
 
-The visualization I chose 
+```{r, message=FALSE, warning=FALSE}
+df |> 
+  filter(Year %in% c(2000, 2010, 2019)) |> 
+  ggplot(aes(x = Consumption, y = Life_expectancy)) +
+  geom_point(aes(color = Sex), size = 0.5) +
+  geom_smooth(aes(color = Sex), method = "lm", se = FALSE) +
+  facet_wrap(~Year, nrow = 1, scales="free") +
+  labs(title = "Life expectancy vs alcohol consumption by sex and year",
+       y = "Life expectancy") +
+  theme_minimal()
+```
+
+The visualization I chose is a modification of the scatterplots from earlier, except now it accounts for sex. The plot shows that for all three years, life expectancy increases with consumption for both sexes, and this increase is greater for females than males. Thus, life expectancy is positively correlated with consumption for both sexes, and this trend is consistent over time (from 2000 to 2019).
 
 ### Advanced Regression
 
@@ -245,9 +261,22 @@ spline_fit <- gam(Life_expectancy ~ Level + s(scale(Population), bs = "cr", k = 
 summary(spline_fit)
 ```
 
+The adjusted R-squared of the linear model (0.2422) is less than that of the spline model (0.252). However, they are quite similar, meaning both models are poor to moderate fits of the data, though all predictors in both models are significant (< 0.001).
+
+From the linear model, the life expectancy of people in the high consumption level is on average 8.25867 years more than those in the low level and 7.88309 years more than those in the medium level. An increase of 1 year in time correlates with an increase of 0.31119 years in life expectancy, while an increase of 1 unit of scaled population correlates with an increase of 0.38438 years. Finally, the life expectancy of males is 5.06841 years less than that of females.
+
+From the spline model, the life expectancy of people in the high consumption level is on average 8.23057 years more than those in the low level and 8.21650 years more than those in the medium level. An increase of 1 year in time correlates with an increase of 0.31562 years in life expectancy. The life expectancy of males is 5.06834 years less than that of females. Finally, the population spline term is noticeably non-linear with an edf (which indicates curvilinearity) of 2.988.
+
+Overall, life expectancy increases with year and scaled population, with differences between consumption levels and sex.
+
 ```{r}
-plot(spline_fit)
+plot(spline_fit,
+     main = "Plot of the population spline term in the GAM model",
+     xlab = "Scaled population",
+     ylab = "Effect on life expectancy")
 ```
+
+The plot shows that as scaled population increases, life expectancy generally increases, with the exception of observations with scaled population below 0 and above 7. Note however that there are no observations with scaled populations between 2 and 7, meaning that the few observations with scaled populations above 7 are likely to be influential points when fitting the spline.
 
 ```{r, message=FALSE}
 df2 <- df |> 
@@ -258,6 +287,14 @@ df2 <- df |>
 summary(lm(mean_life_expectancy ~ mean_consumption + scale(Population) + Sex, data = df2))
 summary(gam(mean_life_expectancy ~ mean_consumption + s(Population, bs = "cr", k = 4) + Sex, data = df2))
 ```
+
+The adjusted R-squared of the linear model (0.1664) is less than that of the spline model (0.17). However, they are quite similar, meaning both models are poor to moderate fits of the data, though all predictors in both models are significant (< 0.001, < 0.05 for scaled population).
+
+From the linear model, an increase of 1 liter in the mean consumption correlates with an increase of 0.57431 in life expectancy. The life expectancy of males is 8.95647 years less than that of females. An increase of 1 unit of scaled population correlates with an increase of 0.25778 years.
+
+From the spline model, an increase of 1 liter in the mean consumption correlates with an increase of 0.57329 in life expectancy. The life expectancy of males is 8.94952 years less than that of females. Finally, the population spline term is noticeably non-linear with an edf of 2.965.
+
+Overall, life expectancy increases with mean consumption per country and scaled population, with differences between consumption levels and sex.
 
 ```{r, message=FALSE}
 df2 |> 
@@ -270,4 +307,3 @@ df2 |>
        y = "Mean life expectancy") +
   theme_minimal()
 ```
-
