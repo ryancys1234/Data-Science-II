@@ -1,0 +1,92 @@
+---
+title: "JSC370H1 - Assignment 3"
+output: 
+  html_document:
+    theme: readable
+---
+
+```{r, include = FALSE}
+# rm(list=ls())
+
+install.packages(c("kableExtra", "tidytext", "tm"))
+# install.packages("httr")
+# install.packages("ggplot2")
+library(httr)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(kableExtra)
+library(tidytext)
+library(tm)
+```
+
+# Part 1
+
+```{r}
+query <- GET(url = "https://api.nasa.gov/neo/rest/v1/feed", query = list(start_date = "2024-03-01", end_date = "2024-03-05", api_key = "Jyr4bwi75CTrtmzGLjzvSrDkiEueIfhAhFnP8k1N"))
+query <- content(query)
+```
+
+I retrieved 97 near Earth objects for the time period 2024-03-01 to 2024-03-05, with 23, 17, 18, 30 and 9 for each day respectively. Each object in the query has an associated URL, ID, name, and recorded attributes such as estimated diameter, relative velocity, and miss distance (from Earth).
+
+```{r}
+df <- query$near_earth_objects$`2024-03-05`
+```
+
+# Part 2
+
+```{r}
+complaints1 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2022-03-25&date_received_max=2022-09-24&has_narrative=true")
+complaints2 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2022-09-25&date_received_max=2023-03-24&has_narrative=true")
+complaints3 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-03-25&date_received_max=2023-09-24&has_narrative=true")
+complaints4 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-09-25&date_received_max=2024-03-24&has_narrative=true")
+complaints <- rbindlist(list(complaints1, complaints2, complaints3, complaints4))
+```
+
+```{r, include = FALSE}
+summary(complaints)
+head(complaints)
+```
+
+To import the data, I had to split my query into four parts to avoid technical issues which I previously encountered. I accessed the data from the API URLs by using `fread` and concatenating the tables using `rbindlist` from the data.table package. Since I am interested in the consumer complaint narratives for later questions, I only retrieved data with non-empty narratives.
+
+The data has 809765 observations of 18 variables, which are all of type character. The variables describe the complaint ID, date of complaint, product, issue, company name, and company response, among other information.
+
+```{r}
+tokens <- complaints |>
+  select(`Consumer complaint narrative`) |>
+  unnest_tokens(word, `Consumer complaint narrative`) |>
+  count(word) |> 
+  arrange(across(n, desc))
+
+tokens |>
+  head(20) |>
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = 'identity') +
+  theme_minimal() +
+  coord_flip() +
+  labs(title = "20 most frequent tokens", x = "Tokens", y = "Count")
+```
+The 20 most frequently occurring tokens are mainly stopwords and fillers such as "xxxx", "the", "and", etc. Three of the tokens, which are "credit", "account", and "information", are more informative words, and they show that the data is primarily concerned with complaints about financial products.
+
+```{r}
+stopwords <- stopwords("english")
+
+tokens2 <- complaints |>
+  select(`Consumer complaint narrative`) |>
+  unnest_tokens(word, `Consumer complaint narrative`) |>
+  filter(!word %in% stopwords) |> 
+  filter(!grepl("^[[:digit:]]+", word)) |>
+  filter(!grepl("^[Xx]+", word)) |> 
+  count(word) |> 
+  arrange(across(n, desc))
+
+tokens2 |>
+  head(20) |>
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = 'identity') +
+  theme_minimal() +
+  coord_flip() +
+  labs(title = "20 most frequent non-stopword tokens", x = "Tokens",
+       y = "Count")
+```
