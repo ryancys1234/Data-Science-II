@@ -47,8 +47,9 @@ asteroids_data <- bind_rows(query$near_earth_objects, .id = "date") |>
   select(date, id, diameter, is_hazardous, relative_velocity)
 
 # Creating the table
-asteroids_data |>
-  kbl() |> 
+asteroids_data[order(as.Date(asteroids_data$date,
+                             format = "%Y-%m-%d")),] |>
+  kbl(row.names = FALSE) |> 
   kable_styling(full_width = T) |> 
   scroll_box(height = "300px")
 ```
@@ -109,13 +110,13 @@ I created boxplots to see if hazardous asteroids differ from non-hazardous aster
 
 # Part 2
 
-```{r, eval=FALSE}
+```{r, message = FALSE, results = 'hide'}
 complaints1 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-03-25&date_received_max=2023-09-24&has_narrative=true")
 complaints2 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-09-25&date_received_max=2024-03-24&has_narrative=true")
 complaints <- rbindlist(list(complaints1, complaints2))
 ```
 
-```{r, include = FALSE, eval=FALSE}
+```{r, include = FALSE}
 summary(complaints)
 head(complaints)
 ```
@@ -124,13 +125,15 @@ To import the data, I had to split my query into two parts to avoid technical is
 
 The data has 428300 observations of 18 variables, which are all of type character. The variables describe the complaint ID, date of complaint, product, issue, company name, and company response, among other information.
 
-```{r, eval=FALSE}
+```{r}
+# Tokenizing the complaints
 tokens <- complaints |>
   select(`Consumer complaint narrative`) |>
   unnest_tokens(word, `Consumer complaint narrative`) |>
   count(word) |> 
   arrange(across(n, desc))
 
+# Plotting the tokens
 tokens |>
   head(20) |>
   ggplot(aes(x = reorder(word, n), y = n)) +
@@ -139,11 +142,12 @@ tokens |>
   labs(title = "20 most frequent tokens", x = "Tokens", y = "Count")
 ```
 
-The 20 most frequently occurring tokens are mainly stopwords and fillers such as "xxxx", "the", "and", etc. Three of the tokens, which are "credit", "account", and "information", are more informative words, and they show that the data is primarily concerned with complaints about financial products.
+The 20 most frequently occurring tokens are mainly stopwords and fillers such as "xxxx", "the", "and", etc. Four of the tokens, which are "credit", "account", "information", and "consumer", are more informative terms. "Credit" and "account" show that the data is primarily concerned with complaints about financial and banking products.
 
-```{r, eval=FALSE}
-stopwords <- stopwords("english")
+```{r}
+stopwords <- c(stopwords("english"), "also", "can", "without")
 
+# Tokenizing the complaints without stopwords
 tokens2 <- complaints |>
   select(`Consumer complaint narrative`) |>
   unnest_tokens(word, `Consumer complaint narrative`) |>
@@ -153,6 +157,7 @@ tokens2 <- complaints |>
   count(word) |> 
   arrange(across(n, desc))
 
+# Plotting the tokens
 tokens2 |>
   head(20) |>
   ggplot(aes(x = reorder(word, n), y = n)) +
@@ -161,3 +166,75 @@ tokens2 |>
   labs(title = "20 most frequent non-stopword tokens", x = "Tokens",
        y = "Count")
 ```
+
+After removing stopwords, the most frequently occurring tokens are noticeably different and more informative, with terms such as "accounts", "agency", "payment", and even "please". Most of them are related to financial and banking products, supporting my previous observation. (Note that "u.s.c" likely means the United States Code, which contains federal laws regarding banking.) The five most common non-stopword tokens for the complaints are "credit", "account", "information", "consumer", and "report".
+
+```{r}
+sw_start <- paste0("^", paste(stopwords, collapse = " |^"), "$")
+sw_end <- paste0("", paste(stopwords, collapse = "$| "), "$")
+
+# Extracting the bigrams without stopwords
+tokens_bigram <- complaints |>
+  sample_n(10000) |> 
+  select(`Consumer complaint narrative`) |>
+  unnest_tokens(ngram, `Consumer complaint narrative`,
+                token = "ngrams", n = 2) |>
+  filter(!grepl(sw_start, ngram, ignore.case = TRUE)) |>
+  filter(!grepl(sw_end, ngram, ignore.case = TRUE)) |>
+  filter(!grepl("^[[:digit:]]+", ngram)) |>
+  filter(!grepl("^[Xx]+", ngram)) |> 
+  count(ngram) |> 
+  arrange(across(n, desc))
+
+# Plotting the bigrams
+tokens_bigram |>
+  head(10) |>
+  ggplot(aes(x = reorder(ngram, n), y = n)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(title = "10 most frequent non-stopword bigrams", x = "Bigrams",
+       y = "Count")
+```
+
+Due to technical constraints, I randomly selected 10000 complaints from the dataset and extracted the bigrams from this subset.
+
+```{r}
+# Calculating the TD-IDF values
+td_idf <- complaints |>
+  select(`Consumer complaint narrative`, Issue) |>
+  unnest_tokens(word, `Consumer complaint narrative`) |>
+  filter(!word %in% stopwords) |> 
+  filter(!grepl("^[[:digit:]]+", word)) |>
+  filter(!grepl("^[Xx]+", word)) |> 
+  count(word, Issue) |> 
+  bind_tf_idf(word, Issue, n) |> 
+  arrange(desc(tf_idf))
+
+# Getting the top 3 issues
+top_issues <- td_idf |> 
+  group_by(Issue) |> 
+  count() |> 
+  arrange(across(n, desc)) |> 
+  head(3) |> 
+  select(Issue) |> 
+  as.list()
+
+top_issues <- top_issues[[1]]
+
+# Plotting the highest TF-IDF values per issue
+td_idf |> 
+  filter(Issue %in% top_issues) |> 
+  group_by(Issue) |> 
+  slice_max(order_by = tf_idf, n = 5) |> 
+  ggplot(aes(x = word, y = tf_idf)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  facet_wrap(~ Issue) +
+  theme(panel.spacing = unit(2, "lines")) +
+  labs(title = "Tokens with highest TD-IDFs for the top 3 issues",
+       x = "Token", y = "TD-IDF")
+```
+
+These results are mostly different from my results (without stopwords) in question 2. In particular, only "report" and "consumer" are among the top 5 most frequent tokens and the tokens with the highest TD-IDFs. Other words, namely "u.s.c", "section", "reporting", and "items", are among the top 20 most frequent tokens and the tokens with the highest TD-IDFs. On the other hand, words such as "chime" and "atm" have high TD-IDFs but do not appear in the top 20 most frequent tokens.
+
+Notice that some tokens with high TD-IDFs such as "u.s.c" and "reporting" are common to more than one issue.
