@@ -8,60 +8,123 @@ output:
 ```{r, include = FALSE}
 # rm(list=ls())
 
-install.packages(c("jsonlite", "kableExtra", "tidytext", "tm"))
-# install.packages("httr")
-# install.packages("ggplot2")
-library(httr)
-library(jsonlite)
+# install.packages(c("jsonlite", "kableExtra", "tidytext", "tm"))
+# install.packages(c("data.table", "httr", "ggplot2"))
+library(data.table)
 library(dplyr)
 library(ggplot2)
-library(data.table)
+library(httr)
+library(jsonlite)
 library(kableExtra)
 library(tidytext)
 library(tm)
+
+theme_set(theme_minimal())
 ```
 
 # Part 1
 
 ```{r, message = FALSE}
 query <- GET(url = "https://api.nasa.gov/neo/rest/v1/feed", query = list(start_date = "2024-03-01", end_date = "2024-03-08", api_key = "Jyr4bwi75CTrtmzGLjzvSrDkiEueIfhAhFnP8k1N"))
+
 query <- fromJSON(httr::content(query, "text"), flatten = TRUE)
 ```
 
 I retrieved 145 near Earth objects for the time period 2024-03-01 to 2024-03-08. Each object in the query has an associated URL, ID, name, and recorded attributes such as estimated diameter, relative velocity, and miss distance from Earth.
 
 ```{r}
-bind_rows(query$near_earth_objects$`2024-03-01`$close_approach_data)
-query$near_earth_objects$`2024-03-01`
+# Adding relative velocity to each asteroid
+for (i in 1:8) {
+  query$near_earth_objects[[i]]$rv_kmph <- as.numeric(bind_rows(query$near_earth_objects[[i]]$close_approach_data)$relative_velocity.kilometers_per_hour)
+}
 
-query %>% unnest(near_earth_objects)
+# Concatenating all dataframes for each date and selecting key variables
+asteroids_data <- bind_rows(query$near_earth_objects, .id = "date") |> 
+  rename(diameter_min = 11, diameter_max = 12,
+         is_hazardous = is_potentially_hazardous_asteroid,
+         relative_velocity = rv_kmph) |> 
+  mutate(diameter = (diameter_min + diameter_max) / 2) |> 
+  select(date, id, diameter, is_hazardous, relative_velocity)
 
-%>% 
-  select(estimated_diameter.meters.estimated_diameter_min,
-         estimated_diameter.meters.estimated_diameter_max,
-         is_potentially_hazardous_asteroid)
+# Creating the table
+asteroids_data |>
+  kbl() |> 
+  kable_styling(full_width = T) |> 
+  scroll_box(height = "300px")
 ```
+
+<br>
+Note that above, the diameter is recorded in kilometers and the relative velocity is recorded in kilometers per hour.
+
+```{r}
+# Exploring number of asteroids per day
+asteroids_data |> 
+  count(date) |> 
+  ggplot(aes(x = date, y = n)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(title = "Number of asteroids per day", x = "Date", y = "Count")
+```
+
+The number of asteroids fluctuates for each date, indicating that this number is likely not correlated from one day to the next. This is expected since asteroids travel from many different sources and hence approach Earth at many different times.
+
+```{r, fig.show = "hold", out.width = "50%"}
+asteroids_data |> 
+  filter(diameter < 1) |> 
+  ggplot(aes(x = diameter, y = relative_velocity)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x, se = FALSE) +
+  labs(title = "Asteroid diameter vs relative velocity",
+       x = "Diameter (km)", y = "Relative velocity (km/h)")
+
+asteroids_data |> 
+  filter(diameter < 1) |> 
+  ggplot(aes(x = diameter, y = relative_velocity, color = is_hazardous)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x, se = FALSE) +
+  labs(title = "Asteroid diameter vs relative velocity by hazard status",
+       x = "Diameter (km)", y = "Relative velocity (km/h)")
+```
+
+I created scatterplots to see if asteroid diameter and relative velocity are related, and if `is_hazardous` has an effect. Since most observations have diameter less than 1 km, I removed three outliers with diameter greater than 1 km. The plots show that relative velocity generally increases with diameter. For non-hazardous asteroids, this holds. For hazardous asteroids, relative velocity decreases as diameter increases, but the association appears to be weak and there are few observations in the group, indicating low confidence in this finding.
+
+```{r, fig.show = "hold", out.width = "50%"}
+asteroids_data |>
+  filter(diameter < 1) |> 
+  group_by(is_hazardous) |> 
+  ggplot(aes(x = is_hazardous, y = diameter)) +
+  geom_boxplot() +
+  labs(title = "Distribution of asteroid diameter by hazard status",
+       x = "Hazard status", y = "Diameter (km)")
+
+asteroids_data |> 
+  group_by(is_hazardous) |> 
+  ggplot(aes(x = is_hazardous, y = relative_velocity)) +
+  geom_boxplot() +
+  labs(title = "Distribution of relative velocity by hazard status",
+       x = "Hazard status", y = "Relative velocity (km/h)")
+```
+
+I created boxplots to see if hazardous asteroids differ from non-hazardous asteroids in terms of diameter and relative velocity. As before, I removed outliers with diameter greater than 1 km. The plots show that hazardous asteroids generally have larger diameters and relative velocities compared to non-hazardous asteroids. In fact, the upper quartile of non-hazardous asteroids' diameters is strictly smaller than the lower quartile of hazardous asteroids' diameters, indicating a significant difference in diameter between the categories. This makes sense since larger asteroids are generally more likely to hit Earth compared to smaller asteroids, meaning the former are more dangerous.
 
 # Part 2
 
-```{r}
-complaints1 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2022-03-25&date_received_max=2022-09-24&has_narrative=true")
-complaints2 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2022-09-25&date_received_max=2023-03-24&has_narrative=true")
-complaints3 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-03-25&date_received_max=2023-09-24&has_narrative=true")
-complaints4 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-09-25&date_received_max=2024-03-24&has_narrative=true")
-complaints <- rbindlist(list(complaints1, complaints2, complaints3, complaints4))
+```{r, eval=FALSE}
+complaints1 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-03-25&date_received_max=2023-09-24&has_narrative=true")
+complaints2 <- fread("https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?format=csv&date_received_min=2023-09-25&date_received_max=2024-03-24&has_narrative=true")
+complaints <- rbindlist(list(complaints1, complaints2))
 ```
 
-```{r, include = FALSE}
+```{r, include = FALSE, eval=FALSE}
 summary(complaints)
 head(complaints)
 ```
 
-To import the data, I had to split my query into four parts to avoid technical issues which I previously encountered. I accessed the data from the API URLs by using `fread` and concatenating the tables using `rbindlist` from the data.table package. Since I am interested in the consumer complaint narratives for later questions, I only retrieved data with non-empty narratives.
+To import the data, I had to split my query into two parts to avoid technical issues which I previously encountered. I accessed the data from the API URLs by using `fread` and concatenating the tables using `rbindlist` from the data.table package. Since I am interested in the consumer complaint narratives for later questions, I only retrieved data with non-empty narratives.
 
-The data has 809765 observations of 18 variables, which are all of type character. The variables describe the complaint ID, date of complaint, product, issue, company name, and company response, among other information.
+The data has 428300 observations of 18 variables, which are all of type character. The variables describe the complaint ID, date of complaint, product, issue, company name, and company response, among other information.
 
-```{r}
+```{r, eval=FALSE}
 tokens <- complaints |>
   select(`Consumer complaint narrative`) |>
   unnest_tokens(word, `Consumer complaint narrative`) |>
@@ -72,13 +135,13 @@ tokens |>
   head(20) |>
   ggplot(aes(x = reorder(word, n), y = n)) +
   geom_bar(stat = 'identity') +
-  theme_minimal() +
   coord_flip() +
   labs(title = "20 most frequent tokens", x = "Tokens", y = "Count")
 ```
+
 The 20 most frequently occurring tokens are mainly stopwords and fillers such as "xxxx", "the", "and", etc. Three of the tokens, which are "credit", "account", and "information", are more informative words, and they show that the data is primarily concerned with complaints about financial products.
 
-```{r}
+```{r, eval=FALSE}
 stopwords <- stopwords("english")
 
 tokens2 <- complaints |>
@@ -94,7 +157,6 @@ tokens2 |>
   head(20) |>
   ggplot(aes(x = reorder(word, n), y = n)) +
   geom_bar(stat = 'identity') +
-  theme_minimal() +
   coord_flip() +
   labs(title = "20 most frequent non-stopword tokens", x = "Tokens",
        y = "Count")
