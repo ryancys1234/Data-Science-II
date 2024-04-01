@@ -1,0 +1,94 @@
+---
+title: "JSC370H1 - Lab 9"
+output: 
+  html_document:
+    theme: readable
+---
+
+```{r, include = FALSE}
+# install.packages("microbenchmark")
+
+library(dplyr)
+library(ggplot2)
+library(parallel)
+```
+
+# Part 1
+
+- Simulating a particular outcome can be solved with parallelization since one can run different simulations on different cores and they don't need to depend on each other. The parSim package may be useful for this.
+- Bagging in ensemble machine learning can be solved with parallelization since it involves training multiple models on random samples of the target data, which can be done on different cores. The h2o, Rborist, and randomForestSRC packages may be useful for this.
+- Generating many probability distributions can be done with parallelization since one can generate a subsample of distrbutions on each core, thus reducing the total computation time. The mvnfast and rxode2random packages may be useful for this.
+
+# Part 2
+
+```{r}
+fun1 <- function(n = 100, k = 4, lambda = 4) {
+  x <- NULL
+  for (i in 1:n) x <- rbind(x, rpois(k, lambda))
+  return(x)
+}
+
+fun1alt <- function(n = 100, k = 4, lambda = 4) { matrix(rpois(n * k, lambda = lambda), ncol = k) }
+
+microbenchmark::microbenchmark(
+  fun1(100),
+  fun1alt(100)
+)
+```
+
+The second function is more than 10 times faster when comparing the min, lq, mean, median, and uq times, and around twice as fast when comparing the maximum time.
+
+```{r}
+set.seed(1234)
+x <- matrix(rnorm(1e4), nrow=10)
+
+fun2 <- function(x) { apply(x, 2, max) }
+fun2alt <- function(x) { x[cbind(max.col(t(x)), 1:ncol(x))] }
+
+bench <- microbenchmark::microbenchmark(
+  fun2(x),
+  fun2alt(x)
+)
+
+bench |> filter(time < 4e+06) |>
+  ggplot(aes(x = expr, y = time)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Comparison of the computation times between fun2 and fun2alt",
+       x = "Function", y = "Time (microseconds)")
+```
+
+# Part 3
+
+```{r}
+my_boot <- function(dat, stat, R, ncpus = 1L) {
+  n <- nrow(dat)
+  idx <- matrix(sample.int(n, n*R, TRUE), nrow=n, ncol=R)
+  cl <- makePSOCKcluster(ncpus)
+  clusterExport(cl, varlist = c("idx", "dat", "stat"), envir = environment())
+  ans <- parLapply(cl, seq_len(R), function(i) { stat(dat[idx[,i], , drop=FALSE]) })
+  ans <- do.call(rbind, ans)
+  stopCluster(cl)
+  ans
+}
+```
+
+```{r, warning = FALSE}
+my_stat <- function(d) coef(lm(y ~ x, data = d))
+
+set.seed(1)
+n <- 500 
+R <- 1e4
+x <- cbind(rnorm(n)) 
+y <- x*5 + rnorm(n)
+
+ans0 <- confint(lm(y ~ x))
+ans1 <- my_boot(dat = data.frame(x, y), stat = my_stat, R = R, ncpus = 4)
+ans0
+t(apply(ans1, 2, quantile, probs = c(.025, .975)))
+
+system.time(my_boot(dat = data.frame(x, y), stat = my_stat, R = R, ncpus = 1))
+system.time(my_boot(dat = data.frame(x, y), stat = my_stat, R = R, ncpus = 8))
+```
+
+My version, with an elapsed time of 5.093 microseconds, is faster than the non-parallel version, with an elapsed time of 6.665 microseconds. My version does have higher user and system time for setting up the parallelization and coordinating the different cores.
