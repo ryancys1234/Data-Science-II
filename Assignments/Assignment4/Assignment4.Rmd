@@ -1,0 +1,328 @@
+---
+title: "JSC370H1 - Assignment 4"
+output: 
+  html_document:
+    theme: readable
+---
+
+# Part 1: High performance computing
+
+```{r, include = FALSE}
+# install.packages(c("microbenchmark", "rpart", "rpart.plot", "randomForest", "gbm", "xgboost"))
+
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(microbenchmark)
+library(parallel)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(gbm)
+library(xgboost)
+library(caret)
+
+theme_set(theme_minimal())
+```
+
+### 1.
+
+```{r, message = FALSE}
+# Sum of each row
+fun1 <- function(mat) {
+  n <- nrow(mat)
+  ans <- double(n) 
+  for (i in 1:n) {
+    ans[i] <- sum(mat[i, ])
+  }
+  ans
+}
+
+fun1alt <- function(mat) {
+  rowSums(mat)
+}
+
+# Cumulative sum by row
+fun2 <- function(mat) {
+  n <- nrow(mat)
+  k <- ncol(mat)
+  ans <- mat
+  for (i in 1:n) {
+    for (j in 2:k) {
+      ans[i,j] <- mat[i, j] + ans[i, j - 1]
+    }
+  }
+  ans
+}
+
+fun2alt <- function(mat) {
+  t(apply(mat, 1, cumsum))
+}
+
+set.seed(2315)
+dat <- matrix(rnorm(200 * 100), nrow = 200)
+
+microbenchmark::microbenchmark(
+  fun1(dat),
+  fun1alt(dat), unit = "relative", check = "equivalent"
+)
+
+microbenchmark::microbenchmark(
+  fun2(dat),
+  fun2alt(dat), unit = "relative", check = "equivalent"
+)
+```
+
+I used ``rowSums`` and ``cumsum`` for the alternative functions, which are around 3 to 4 times faster compared to their respective original functions.
+
+### 2.
+
+```{r}
+sim_pi <- function(n = 1000, i = NULL) {
+  p <- matrix(runif(n * 2), ncol = 2)
+  mean(rowSums(p^2) < 1) * 4
+}
+
+# Serial computing
+set.seed(1231)
+system.time({
+  ans <- unlist(lapply(1:4000, sim_pi, n = 10000))
+  print(mean(ans))
+})
+
+# Parallel computing
+set.seed(1231)
+system.time({
+  cl <- makePSOCKcluster(detectCores())
+  clusterSetRNGStream(cl, 1231)
+  clusterExport(cl, varlist = c("sim_pi"), envir = environment())
+  ans <- unlist(parLapply(cl, 1:4000, function(i) {
+    sim_pi(n = 10000)
+  }))
+  stopCluster(cl)
+  print(mean(ans))
+})
+```
+
+Both estimates for $\pi$ are similar in accuracy, with their percent errors being `r 100 * abs(3.141144 - pi) / pi` and `r 100 * abs(3.14124 - pi) / pi` respectively. The estimation using parallel computing has significantly shorter ``user`` and ``system`` times. On the other hand, it has a similar ``elapsed`` time compared to the serial computing method, which likely results from the time it takes to create the socket clusters.
+
+# Part 2: Machine learning
+
+```{r, message = FALSE}
+data <- read_csv("https://raw.githubusercontent.com/JSC370/JSC370-2024/main/data/hitters/hitters.csv")
+
+# Splitting the data into training and testing sets
+set.seed(100)
+train <- sample(1:nrow(data), round(0.7 * nrow(data)))
+data_train <- data[train,]
+data_test <- data[-train,]
+```
+
+### 1.
+
+```{r, message = FALSE}
+# Regression tree
+regression_tree <- rpart(Salary ~ ., method = 'anova', data = data_train)
+
+# Pruning the tree
+optimalcp <- regression_tree$cptable[which.min(regression_tree$cptable[, "xerror"]), "CP"]
+regression_tree_pruned <- prune(regression_tree, cp = optimalcp)
+
+# Plotting both trees
+rpart.plot(regression_tree)
+rpart.plot(regression_tree_pruned)
+```
+
+The above plots show that the pruned tree is less complex than the initial regression tree, with 3 splits for the former compared to the 8 splits for the latter. The fact that the variables ``CHits``, ``Walks``, and ``AtBat`` determine the splits of the pruned tree, which has the optimal complexity parameter, suggests that they are relatively important variables.
+
+### 2.
+
+```{r, fig.show = 'hide'}
+set.seed(100)
+
+# Bagging
+bag <- randomForest(Salary ~ ., data = data_train, mtry = ncol(data_train) - 1, na.action = na.omit)
+
+# Creating data frame for variable importance
+imp <- as.data.frame(varImpPlot(bag))
+```
+
+```{r}
+imp$var_names <- rownames(imp)
+
+# Plotting variable importance for bagging
+imp |> ggplot(aes(x = reorder(var_names, IncNodePurity), y = IncNodePurity)) + 
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names, y = 0, yend = IncNodePurity)) +
+  labs(title = "Variable importance for bagging", x = "Variable", y = "Increase in node purity") +
+  coord_flip()
+```
+
+The above plot shows that for bagging, the two most important variables are ``CHits`` and ``Walks``, with most of the other variables being significantly less important than to them (as measured by their increases in node purity). This is somewhat consistent with the pruned regression tree, which uses ``CHits`` and ``Walks`` on two of its splits, indicating the importance of the two variables.
+
+### 3.
+
+```{r, fig.show = 'hide'}
+set.seed(100)
+
+# Random forest
+rf <- randomForest(Salary ~ ., data = data_train, na.action = na.omit)
+
+# Creating data frame for variable importance for random forest
+imp <- as.data.frame(varImpPlot(rf))
+```
+
+```{r}
+imp$var_names <- rownames(imp)
+
+# Plotting variable importance for random forest
+imp |> ggplot(aes(x = reorder(var_names, IncNodePurity), y = IncNodePurity)) + 
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names, y = 0, yend = IncNodePurity)) +
+  labs(title = "Variable importance for random forest", x = "Variable", y = "Increase in node purity") +
+  coord_flip()
+```
+
+The above plot shows that for random forest, the two most important variables are ``CHits`` and ``Walks``, which is consistent with bagging. The difference compared to bagging is that here, there is a larger difference between the increases in node purity for ``CHits`` and ``Walks``, while there is a smaller difference between the increases in node purity for ``Walks`` and the next most important variable. In addition, the order of the rest of the variables is different as well.
+
+### 4.
+
+```{r, warning = FALSE}
+set.seed(100)
+
+# Preparing training set for boosting
+boost_train <- na.omit(data_train)
+boost_train$League <- as.factor(boost_train$League)
+boost_train$Division <- as.factor(boost_train$Division)
+boost_train$NewLeague <- as.factor(boost_train$NewLeague)
+
+# Preparing lists for plotting
+shrinkage <- 10^seq(-2, 0, 0.1)
+train_error <- rep(NA, length(shrinkage))
+
+# Iterating over shrinkage values
+for (i in 1:length(shrinkage)) {
+  boost <- gbm(Salary ~ ., data = boost_train,
+               distribution = 'gaussian', n.trees = 1000,
+               shrinkage = shrinkage[i])
+  boost_pred <- predict(boost, boost_train, n.trees = 1000)
+  train_error[i] <- mean((boost_pred - boost_train$Salary)^2)
+}
+
+# Plotting training set MSE vs shrinkage value
+ggplot(aes(x = shrinkage, y = train_error), data = NULL) +
+  geom_point() +
+  geom_line(color = "red") +
+  labs(title = "Training set MSE vs shrinkage value for boosting",
+       x = "Shrinkage value", y = "Training set MSE")
+```
+
+The above plot shows that for boosting, training set MSE decreases as shrinkage value increases.
+
+```{r, fig.show = 'hide'}
+# Creating data frame for variable importance for boosting
+imp <- as.data.frame(summary.gbm(boost))
+```
+
+```{r}
+# Plotting variable importance for boosting
+imp |> ggplot(aes(x = reorder(var, rel.inf), y = rel.inf)) + 
+  geom_point() +
+  geom_segment(aes(x = var, xend = var, y = 0, yend = rel.inf)) +
+  labs(title = "Variable importance for boosting", x = "Variable", y = "Relative influence") +
+  coord_flip()
+```
+
+The above plot shows that for boosting (with $\lambda = 1$), the most important variable is ``Walks``, which is the second most important variable for bagging and random forest. However, ``CHits``, which is the most important variable for bagging and random forest, has the fourth smallest importance for boosting, and the order of the rest of the variables is different as well. This discrepancy might be due to the differences in the models and the metric used for measuring importance in GBMs (which is relative influence instead of increase in node purity).
+
+### 5.
+
+```{r, message = FALSE}
+# Creating grid of parameters for XGBoost
+tune_grid <- expand.grid(max_depth = c(1, 3, 5, 7),
+                         nrounds = (1:10) * 50,
+                         eta = c(0.001, 0.01, 0.1, 0.2),
+                         gamma = 0,
+                         subsample = 1,
+                         min_child_weight = 1,
+                         colsample_bytree = 0.6)
+
+# XGBoost
+xgb <- caret::train(Salary ~ ., data = boost_train, method = 'xgbTree',
+                    trControl = trainControl(method = "cv", number = 10, search = "grid"),
+                    tuneGrid = tune_grid, verbosity = 0)
+
+xgb$results |> 
+  select(eta, RMSE) |> 
+  group_by(eta) |> 
+  summarize(MSE = min(RMSE)^2) |> 
+  ggplot(aes(x = eta, y = MSE)) +
+  geom_point() +
+  geom_line(color = "red") +
+  labs(title = "Training set MSE vs learning rate for XGBoost",
+       x = "Learning rate (ETA)", y = "Training set MSE")
+```
+
+For the above plot, I selected the minimum MSE for each ``max_depth``, resulting in one MSE value for every learning rate (which is ETA or the shrinkage rate). Similar to boosting, the plot shows that for XGBoost, training set MSE decreases as the learning rate increases. The decrease is most significant between learning rates of 0.001 and 0.01.
+
+```{r}
+# Creating data frame for variable importance for XGBoost
+imp <- varImp(xgb)$importance
+imp$var_names <- rownames(imp)
+
+# Plotting variable importance for XGBoost
+imp |> ggplot(aes(x = reorder(var_names, Overall), y = Overall)) + 
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names, y = 0, yend = Overall)) +
+  labs(title = "Variable importance for XGBoost", x = "Variable", y = "Importance") +
+  coord_flip()
+```
+
+For XGBoost, the two most important variables are ``CHits`` and ``Walks``, which is consistent with bagging and random forest, and to a lesser degree the pruned regression tree.
+
+### 6.
+
+```{r, warning = FALSE}
+# Removing NA's from test set
+data_test <- na.omit(data_test)
+
+# Regression tree MSE
+regression_pred <- predict(regression_tree_pruned, data_test)
+regression_MSE <- mean((regression_pred - data_test$Salary)^2)
+
+# Bagging MSE
+bag_pred <- predict(bag, data_test)
+bag_MSE <- mean((bag_pred - data_test$Salary)^2)
+
+# Random forest MSE
+rf_pred <- predict(rf, data_test)
+rf_MSE <- mean((rf_pred - data_test$Salary)^2)
+
+# Boosting MSE
+test_error <- rep(NA, length(shrinkage))
+for (i in 1:length(shrinkage)) {
+  boost <- gbm(Salary ~ ., data = boost_train,
+               distribution = 'gaussian', n.trees = 1000,
+               shrinkage = shrinkage[i])
+  boost_pred <- predict(boost, data_test, n.trees = 1000)
+  test_error[i] <- mean((boost_pred - data_test$Salary)^2)
+}
+boost_MSE <- mean(test_error)
+
+# XGBoost MSE
+xgb_pred <- predict(xgb, data_test)
+xgb_MSE <- mean((xgb_pred - data_test$Salary)^2)
+
+data.frame(Method = c("Regression tree", "Bagging", "Random forest", "Boosting", "XGBoost"), 
+           MSE = c(regression_MSE, bag_MSE, rf_MSE, boost_MSE, xgb_MSE)) |> 
+  ggplot(aes(x = Method, y = MSE)) +
+  geom_bar(stat = 'identity', width = 0.5) +
+  labs(title = "Test MSE for each method") +
+  coord_flip()
+```
+
+The plot above shows that random forest has the lowest MSE while the pruned regression tree has the highest. Thus, the best-performing approach is random forest. Interestingly, while XGBoost has a lower MSE than regular boosting, it does not have the lowest MSE. This could be because the hyperparameters have not been tuned sufficiently or that XGBoost is overly complex for the data.
+
+### 7.
+
+To summarize, the two most importance variables for bagging, random forest, and XGBoost are ``CHits`` and ``Walks``. For boosting, the most important variable is ``Walks``, while ``CHits`` has relatively little importance. Since ``CHits`` and ``Walks`` have high importance scores for most or all of questions 2 to 5, we can be confident that they are important for predicting players' salaries. Other than this, there are minor differences for the results of each question, such as the order of the rest of the variables by importance.
