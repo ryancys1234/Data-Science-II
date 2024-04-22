@@ -1,5 +1,6 @@
 ---
-title: "JSC370H1 - Final"
+title: "Identifying predictors of postoperative blood-related health complications"
+subtitle: "JSC370H1 - Final Project"
 author: "Ryan Shi"
 output: 
   pdf_document:
@@ -125,7 +126,7 @@ merged |> filter(stream > 12) |> count()
 
 # Introduction
 
-Healthcare-associated infections or healthcare-acquired infections (HAI) are common in hospitals and can increase morbidity and mortality in patients as well as induce health complications (Kanerva et al. 2008). Other factors that may influence the treatment of patients include staff vaccination rates (Hollmeyer et al. 2012) and emergency department (ED) volume (Brar et al. 2013). Identifying the specific infections and other factors that correlate with the greatest increase in health complications and morbidity will inform initiatives of hospitals to improve their quality and efficiency of care.
+Health complications following surgery pose problems to treatment efficacy and often contribute to higher healthcare costs (Dencker et al. 2021). Potential factors for these complications include healthcare-associated infections or healthcare-acquired infections (HAI), which are common in hospitals and can increase morbidity and mortality in patients (Kanerva et al. 2008). Other factors that may influence the treatment of patients include staff vaccination rates (Hollmeyer et al. 2012) and emergency department (ED) volume (Brar et al. 2013). Identifying the specific infections and other factors that correlate with the greatest increase in postoperative health complications will inform initiatives of hospitals to improve their quality and efficiency of care.
 
 For 5424 hospitals registered with Medicare in the U.S., the [Centers for Medicare & Medicaid Services](https://www.cms.gov) have collected data regarding HAI, ED volume, staff vaccination rates, and complications and mortality rates.
 
@@ -461,6 +462,8 @@ Despite the insignificant findings, for two of the fitted models, the rate of he
 # Works cited
 
 Brar S, McAlister FA, Youngson E, Rowe BH. 2013. Do Outcomes for Patients With Heart Failure Vary by Emergency Department Volume? Circulation: Heart Failure. 6(6): 1147–1154.
+
+Dencker EE, Bonde A, Troelsen A, Varadarajan KM, Sillesen M. 2021. Postoperative complications: an observational study of trends in the United States from 2012 to 2018. BMC Surgery. 21(1): 1-10.
 
 Hollmeyer H, Hayden F, Mounts A, Buchholz U. 2012. Review: interventions to increase influenza vaccination among healthcare workers in hospitals. Influenza and Other Respiratory Viruses. 7(4): 604–621.
 
