@@ -1,0 +1,178 @@
+---
+title: "JSC370H1 - Lab 11"
+output: 
+  html_document:
+    theme: readable
+---
+
+```{r, message = FALSE, echo = FALSE, warning = FALSE}
+library(tidyverse)
+library(plotly)
+library(widgetframe)
+library(tidytext)
+```
+
+# Part 1
+
+```{r, message = FALSE, warning = FALSE}
+sb_locs <- read_csv("starbucks_locations.csv", show_col_types = FALSE)
+sb_nutr <- read_csv("starbucks_menu_nutrition.csv", show_col_types = FALSE)
+usa_pop <- read_csv("us_state_pop.csv", show_col_types = FALSE)
+usa_states <- read_csv("states.csv", show_col_types = FALSE)
+```
+
+# Part 2
+
+```{r}
+sapply(sb_locs, class)
+sapply(sb_nutr, class)
+sapply(usa_pop, class)
+sapply(usa_states, class)
+mean(is.na(sb_locs))
+mean(is.na(sb_nutr))
+mean(is.na(usa_pop))
+mean(is.na(usa_states))
+```
+
+The datasets have been imported correctly and the columns have reasonable types (e.g., store and phone numbers are of type character, while longitude and calories are of type numeric). The Starbucks location dataset is 2.5% missing, while the other datasets have no missing values.
+
+# Part 3
+
+```{r}
+sb_locs_state <- sb_locs |> 
+  filter(Country == "US") |>
+  group_by(`State/Province`) |>
+  rename(state = `State/Province`) |>
+  summarize(n_stores = n())
+
+usa_pop_abbr <- full_join(x = usa_pop,
+                          y = usa_states,
+                          by = join_by(state == State))
+  
+sb_locs_state <- full_join(x = usa_pop_abbr,
+                           y = sb_locs_state,
+                           by = join_by(Abbreviation == state))
+
+summary(sb_locs_state)
+```
+
+# Part 4
+
+```{r, message = FALSE, warning = FALSE}
+p1 <- sb_locs_state |> 
+  ggplot(aes(x = population, y = n_stores, color = Abbreviation)) +
+  geom_point(alpha = 0.8) +
+  labs(x = "Population", y = "Number of stores") +
+  theme_minimal()
+
+p2 <- sb_nutr |> 
+  ggplot(aes(x = Calories)) +
+  geom_histogram() +
+  facet_grid(.~Category) +
+  labs(y = "Count") +
+  theme_minimal()
+
+p3 <- sb_nutr |>
+  select(Item) |> 
+  unnest_tokens(word, Item) |> 
+  group_by(word) |> 
+  count() |> 
+  arrange(desc(n)) |> 
+  head(20) |>
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = "Count", x = "Word") +
+  theme_minimal()
+
+ggplotly(p1)
+ggplotly(p2)
+ggplotly(p3)
+```
+
+# Part 5
+
+```{r, warning = FALSE, message = FALSE}
+sb_nutr |> 
+  plot_ly(x = ~Calories, y = ~`Carb. (g)`, type = 'scatter',
+          mode = 'markers', color = ~Category) |> 
+  layout(title = "Carbohydrates vs calories by food and drinks")
+
+topwords <- sb_nutr |>
+  select(Item) |> 
+  unnest_tokens(word, Item) |> 
+  group_by(word) |> 
+  count() |> 
+  arrange(desc(n)) |> 
+  head(10)
+
+sb_nutr |> 
+  unnest_tokens(word, Item) |> 
+  filter(word %in% topwords$word) |> 
+  plot_ly(x = ~Calories, y = ~`Carb. (g)`, type = 'scatter',
+          mode = 'markers', color = ~Category, hoverinfo = "text",
+          text = ~paste0("Item: ", word, sep = "")) |> 
+  layout(title = "Carbohydrates vs calories for items with the top 10 words",
+         yaxis = list(title = "Carbohydrates (g)"),
+         hovermode = "compare")
+```
+
+# Part 6
+
+```{r, message = FALSE, warning = FALSE}
+filtered_data <- sb_nutr |> 
+  unnest_tokens(word, Item) |> 
+  filter(word %in% topwords$word)
+
+filtered_data |> 
+  plot_ly(x = ~word, type = "box") |> 
+  add_boxplot(y = ~Calories, boxpoints = "all") |> 
+  add_boxplot(y = ~`Fat (g)`, boxpoints = "all") |> 
+  add_boxplot(y = ~`Carb. (g)`, boxpoints = "all") |> 
+  add_boxplot(y = ~`Fiber (g)`, boxpoints = "all") |> 
+  add_boxplot(y = ~`Protein (g)`, boxpoints = "all") |> 
+  layout(title = "Boxplot of nutrition variables for the top 10 words",
+         xaxis = list(title = "Word"), boxmode = "group",
+         showlegend = FALSE)
+```
+
+# Part 7
+
+```{r, message = FALSE, warning = FALSE}
+filtered_data |> 
+  plot_ly(x = ~Calories, y = ~`Carb. (g)`, z = ~`Protein (g)`,
+          type = 'scatter3d', mode = 'markers', color = ~word) |> 
+  layout(title = "Carbohydrates vs calories vs protein for the top 10 words")
+```
+
+# Part 8
+
+```{r, warning = FALSE, message = FALSE}
+set_map_details <- list(scope = 'usa',
+                        projection = list(type = 'albers usa'),
+                        showlakes = TRUE,
+                        lakecolor = toRGB('steelblue'))
+
+shadeLimit <- 125
+
+sb_locs_state$hover <- with(sb_locs_state,
+                            paste("Number of Starbucks: ",
+                                  n_stores, '<br>', "State: ", state,
+                                  '<br>', "Population: ", population))
+
+map1 <- plot_geo(sb_locs_state, locationmode = 'USA-states') |> 
+  add_trace(z = ~n_stores, text = ~hover, locations = ~Abbreviation,
+            color = ~n_stores, colors = 'Purples') |> 
+  layout(geo = set_map_details)
+
+map2 <- plot_geo(sb_locs_state, locationmode = 'USA-states') |> 
+  add_trace(z = ~population, text = ~hover,
+            locations = ~Abbreviation, color = ~population,
+            colors = 'Purples') |> 
+  layout(geo = set_map_details)
+
+subplot(map1, map2) |> 
+  layout(title = "Starbucks stores (right) and population (left) by state")
+```
+
+The maps show that states with higher populations tend to have more Starbucks stores. For instance, California is the most populous state, and it also has the highest number of Starbucks stores. Likewise, states with low populations, such as Montana and Wyoming, have fewer Starbucks stores.
