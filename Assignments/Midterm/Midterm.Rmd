@@ -175,7 +175,7 @@ Since I did not deem these proportions of missing values to be significant, I jo
 
 ### Outliers and implausible values
 
-Looking at the distribution of each variable, I did not find outliers or implausible values for `staph`, `ed_vol`, covid_vac`, and `flu_vac`. For the other variables:
+Looking at the distribution of each variable, I did not find outliers or implausible values for `staph`, `ed_vol`, `covid_vac`, and `flu_vac`. For the other variables:
 
 - `central_line`: Most values are between 0% and 35%. I removed 3 outliers with values greater than 50%.
 - `hem`: Most values are between 1% and 4%. I removed 1 outlier with value greater than 6%.
