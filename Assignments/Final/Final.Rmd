@@ -210,7 +210,7 @@ Looking at the distribution of each variable, I did not find outliers or implaus
 - `clot`: Most values are between 1% and 6%. I removed 1 outlier with value greater than 7%.
 - `stream`: Most values are between 1% and 10%. I removed 1 outlier with value greater than 12%.
 
-For `central_line` and `staph`, 37.8% and 44.2% of their points have a value of 0%. These points may skew my overall results, but since they make up a large proportion of the values, I did not remove them entirely. Instead, I only removed them temporarily in some exploratory graphs for clarity.
+For `central_line` and `staph`, 37.8% and 44.2% of their values are 0%. These points may skew my overall results, but since they make up a large proportion of the values, I did not remove them entirely. Instead, I only removed them temporarily in some exploratory graphs for clarity.
 
 ## Data exploration tools
 
@@ -236,14 +236,14 @@ merged_summary <- merged |>
 merged_summary <- as.data.frame(do.call(rbind, merged_summary))
 rownames(merged_summary) <- c("Central line infection", "Staph infection", "COVID vaccination", "Flu vaccination", "Hemorrhage/hematoma", "Serious blood clots", "Bloodstream infection")
 
-kable(merged_summary, caption = "Summary of the numerical variables (rates)") |> 
+kable(merged_summary, caption = "Summary of the numeric variables (rates)") |> 
   pack_rows("Predictors", 1, 4) |> 
   pack_rows("Outcomes", 5, 7)
 ```
 
-Table 1 shows that central line and staph infections are very skewed towards 0%, meaning they rarely occur in hospitals. Indeed, most values are 0% (as mentioned before), since the table shows it as both the minimum and 1st quartile value. Both vaccination rates are skewed towards 100%, indicating that hospitals are generally successful in encouraging vaccination among their workers. The last three response variables are all skewed towards 0%, meaning they rarely occur after surgeries. Of the response variables, the rate of postoperative bloodstream infection has the greatest values for all listed metrics, indicating that it is somewhat more common.
+First, I explore the distributions of the numeric variables. Table 2 shows that the rates of central line and staph infections are very skewed towards 0%, meaning these infections rarely occur in hospitals. This agrees with my previous finding that 37.8% and 44.2% of `central_line` and `staph` respectively are 0%. Both vaccination rates are skewed towards 100%, indicating that hospitals are generally successful in encouraging vaccination among their workers. Finally, the outcome variables are all skewed towards 0%, meaning postoperative blood-related complications are generally uncommon. Of these variables, the rate of postoperative bloodstream infections is the largest across all listed metrics, indicating that it is relatively more common than the other outcomes.
 
-```{r, echo = FALSE, message = FALSE, fig.align = 'center', out.width = "75%"}
+```{r, echo = FALSE, message = FALSE, fig.show = "hold", out.width = "50%"}
 ggplot(merged, aes(x = hem)) +
   geom_histogram() +
   labs(x = "Hemorrhage / hematoma rate", y = "Count") +
@@ -253,11 +253,28 @@ ggplot(merged, aes(x = clot)) +
 ggplot(merged, aes(x = stream)) +
   geom_histogram() +
   labs(x = "Bloodstream infection rate", y = "Count") +
-  plot_layout(ncol = 3) +
-  plot_annotation(title = "Distributions of the outcome variables")
+  plot_layout(nrow = 3) +
+  plot_annotation(title = "Distributions of the outcome variables (rates)")
 ```
 
-TODO: explain above
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.show = "hold", out.width = "50%"}
+ggplot(merged, aes(x = hem_count)) +
+  geom_histogram(bins = 50) +
+  xlim(0, 200) +
+  labs(x = "# of hemorrhage / hematoma events", y = "Count") +
+ggplot(merged, aes(x = clot_count)) +
+  geom_histogram(bins = 50) +
+  xlim(0, 300) +
+  labs(x = "# of serious blood clot events", y = "Count") +
+ggplot(merged, aes(x = stream_count)) +
+  geom_histogram(bins = 50) +
+  xlim(0, 200) +
+  labs(x = "# of bloodstream infection events", y = "Count") +
+  plot_layout(nrow = 3) +
+  plot_annotation(title = "Distributions of the outcome variables (numbers of events)")
+```
+
+To further explore their distributions, I now look at the outcome variables both as rates and as counts of postoperative complications. The rates appear to be normally distributed with slightly longer right tails, while the counts of events appear to be Poisson distributed with no obvious upper bounds. This suggests that compared to linear regression, Poisson regression might be more suitable to model postoperative complications, which will be done later on.
 
 ```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 # Pairwise correlation heatmap
@@ -274,7 +291,9 @@ merged |>
   theme(axis.title = element_blank())
 ```
 
-The heatmap above shows that overall, there is little correlation between the predictors (`central_line`, `staph`, `covid_vac`, `flu_vac`) and the outcomes (`hem`, `clot`, `stream`), with most correlations being between 0 and 0.1. Among all pairs of predictors and outcomes, the pairs `staph` and `stream`, `covid_vac` and `clot`, and `flu_vac` and `hem` have the greatest correlations, with values 0.11, 0.11, and 0.12 respectively. This suggests that `staph`, `covid_vac`, and `flu_vac` are likely to be the most significant predictors of these response variables. Interestingly, there appears to be collinearity between both rates of vaccination (correlation = 0.37), suggesting that hospitals tend to encourage multiple vaccinations together for their workers. As well, there appears to be collinearity between `central_line` and `staph` (correlation = 0.28), suggesting that these sources of healthcare-acquired infections are likely to occur together.
+Next, I explore the pairwise correlations between the numerical variables. The heatmap above shows that overall, there is little correlation between the predictors (`central_line`, `staph`, `covid_vac`, `flu_vac`) and the outcomes (`hem`, `clot`, `stream`), with most coefficients being between 0 and 0.1. Among all pairs of predictors and outcomes, the pairs `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` have the greatest coefficients, with values 0.12, 0.11, and 0.11 respectively. This suggests that `flu_vac`, `covid_vac`, and `staph` are likely to be the most significant predictors of these response variables.
+
+Interestingly, with a coefficient of 0.37, there appears to be collinearity between both rates of vaccination, suggesting that hospital staff tend to be vaccinated against multiple pathogens at the same time. As well, with a coefficient of 0.28, there appears to be collinearity between `central_line` and `staph`, suggesting that these healthcare-acquired infections likely occur together.
 
 ```{r, echo = FALSE, fig.show = "hold", out.width = "50%"}
 merged |>
