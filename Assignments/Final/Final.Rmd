@@ -36,7 +36,6 @@ library(caret)
 hai <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/05819383a875a1ebce5ed5f28755558b_1712462723/Healthcare_Associated_Infections-Hospital.csv")
 tec <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/350f34f9ef3d484925d49dfcce7a0f54_1712462752/Timely_and_Effective_Care-Hospital.csv")
 cd <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/1818d71cb5d94636b87ed8459af818d6_1712462715/Complications_and_Deaths-Hospital.csv")
-state_coord <- read_csv("https://raw.githubusercontent.com/ryancys1234/JSC370-Project/main/data/state_coord.csv")
 
 select <- dplyr::select
 theme_set(theme_minimal())
@@ -456,31 +455,31 @@ tune_grid <- expand.grid(
   eta = c(0.001, 0.01, 0.1, 0.2), gamma = 0, subsample = 1,
   min_child_weight = 1, colsample_bytree = 0.6)
 
-# xgb1 <- caret::train(
-#   hem ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-#   data = train, method = 'xgbTree',
-#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
-#   tuneGrid = tune_grid, verbosity = 0)
+xgb1 <- caret::train(
+  hem ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+  data = train, method = 'xgbTree',
+  trControl = trainControl(method = "cv", number = 10, search = "grid"),
+  tuneGrid = tune_grid, verbosity = 0)
 
-# xgb2 <- caret::train(
-#   clot ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-#   data = train, method = 'xgbTree',
-#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
-#   tuneGrid = tune_grid, verbosity = 0)
+xgb2 <- caret::train(
+  clot ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+  data = train, method = 'xgbTree',
+  trControl = trainControl(method = "cv", number = 10, search = "grid"),
+  tuneGrid = tune_grid, verbosity = 0)
 
-# xgb3 <- caret::train(
-#   stream ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-#   data = train, method = 'xgbTree',
-#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
-#   tuneGrid = tune_grid, verbosity = 0)
+xgb3 <- caret::train(
+  stream ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+  data = train, method = 'xgbTree',
+  trControl = trainControl(method = "cv", number = 10, search = "grid"),
+  tuneGrid = tune_grid, verbosity = 0)
 
 # saveRDS(xgb1, "xgb1.rds")
 # saveRDS(xgb2, "xgb2.rds")
 # saveRDS(xgb3, "xgb3.rds")
 
-xgb1 <- readRDS("xgb1.rds")
-xgb2 <- readRDS("xgb2.rds")
-xgb3 <- readRDS("xgb3.rds")
+# xgb1 <- readRDS("xgb1.rds")
+# xgb2 <- readRDS("xgb2.rds")
+# xgb3 <- readRDS("xgb3.rds")
 
 imp1 <- as.data.frame(varImpPlot(bag1))
 imp2 <- as.data.frame(varImpPlot(bag2))
@@ -503,7 +502,7 @@ imp8$var_names <- rownames(imp8)
 imp9$var_names <- rownames(imp9)
 ```
 
-To answer my question using machine learning, I create bagging, random forest, and XGBoost models for each outcome and explore their variable importance metrics. To train the models and calculate their test MSEs, I split the data into 70% train and 30% test sets.
+To answer my question using machine learning, I now create bagging, random forest, and XGBoost models for each outcome and explore their variable importance metrics. Specifically, I aim to determine whether XGBoost has better predictive accuracy compared to the other less complex models. To train the models and calculate their test MSEs, I split the data into 70% train and 30% test sets.
 
 ```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 imp1 |>
@@ -536,7 +535,7 @@ imp7 |>
   plot_annotation(title = "Variance importance for predicting the variable 'hem' using:")
 ```
 
-The above plot shows that `covid_vac` is the most important variable for predicting `hem` in the bagging and random forest models. In fact, `covid_vac`, `central_line`, `staph`, and `flu_vac` all have very similar levels of importance in the random forest model. Importantly, `flu_vac` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `hem`. Despite this, `flu_vac` has lower importance in the bagging and random forest models. Finally, `ED_vol` is the least important variable for all models, which agrees with the results of my exploratory data analysis.
+The above plot shows that `covid_vac` is the most important variable for predicting `hem` when using bagging and random forest. In fact, `covid_vac`, `central_line`, `staph`, and `flu_vac` all have very similar levels of importance in the random forest model. Importantly, `flu_vac` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `hem`. Despite this, `flu_vac` has lower importance in the bagging and random forest models. Finally, `ED_vol` is the least important variable for all models, which agrees with the results of my exploratory data analysis.
 
 ```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 imp2 |>
@@ -602,7 +601,7 @@ imp9 |>
   plot_annotation(title = "Variance importance for predicting the variable 'stream' using:")
 ```
 
-The above plot shows that `central_line` is the most important variable and `staph` is the second most important variable for predicting `stream` in the bagging and random forest models. Interestingly, `central_line` and `staph` have very similar levels of importance in the random forest model. Importantly, `staph` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `stream`. Again, `ED_vol` is the least important variable for all models.
+The above plot shows that `central_line` is the most important variable and `staph` is the second most important variable for predicting `stream` when using bagging and random forest. Interestingly, `central_line` and `staph` have very similar levels of importance in the random forest model. Importantly, `staph` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `stream`. Again, `ED_vol` is the least important variable for all models.
 
 Finally, I now look at the test MSEs of the models.
 
@@ -644,23 +643,23 @@ data.frame(Method = c("Bagging", "Random forest", "XGBoost"),
   plot_annotation(title = "Test MSE for each method and outcome")
 ```
 
-The above plot shows that the random forest model has the smallest MSE when predicting `hem` and `clot` on the test set, while the XGBoost model has the smallest MSE when predicting `stream` on the test set. Interestingly, all three models have very similar MSEs when predicting `hem` and `clot`, while the bagging model has a significantly larger MSE when predicting `stream`.
+The above plot shows that the random forest model has the smallest MSE when predicting `hem` and `clot` on the test set, while the XGBoost model has the smallest MSE when predicting `stream` on the test set. In fact, all models have very similar MSEs when predicting `hem` and `clot`. Thus, XGBoost does not perform as well as I thought compared to the other approaches. However, it does perform significantly better than bagging when predicting `stream`, indicating an improvement in accuracy for this outcome.
 
-For `hem`, `clot`, and `stream`, the ratios of the model MSEs to their variances are `r mean((predict(rf1, test) - test$hem)^2) / var(test$hem)`, `r mean((predict(rf2, test) - test$clot)^2) / var(test$clot)`, and `r mean((predict(xgb3, test) - test$stream)^2) / var(test$stream)` respectively. Thus, the MSEs of the models are close to the variances of the outcomes, indicating that the models likely have low predictive power and that the relationships between the predictors and outcomes are ultimately weak. Nevertheless, the variable importance metrics (especially for the XGBoost model) agree with my previous findings, indicating that the predictors and outcomes are at least related to some extent.
+Overall, random forest performs the best for predicting `hem` and `clot`, while XGBoost performs the best for predicting `stream`. In particular, the most important variables for the XGBoost models agree with the results of my regression analysis, which reinforces their significance.
 
 # Summary
 
-Overall, I found that rates of vaccinations among hospital staff and hospital-acquired staph infections are able to predict postoperative blood-related complication rates to some extent. Specifically, `flu_vac`, `covid_vac`, and `staph` are the most significant predictors for `hem`, `clot`, and `stream` respectively, or in other words:
+In summary, I found that rates of vaccinations among hospital staff and hospital-acquired staph infections are able to predict postoperative blood-related complication rates to some extent. Specifically, `flu_vac`, `covid_vac`, and `staph` are the most significant predictors for `hem`, `clot`, and `stream` respectively, or in other words:
 
 - The rate of flu vaccinations among hospital staff is likely related to the rate of postoperative hemorrhage / hematoma events;
 
 - The rate of COVID vaccinations among hospital staff is likely related to the rate of postoperative serious blood clots; and
 
-- The rate of hospital-acquired staph infections is likely related to the rate of postoperative bloodstream infections.
+- The rate of hospital-acquired staph infections is likely related to the rate of postoperative bloodstream infections. This relationship might be relatively strong since it has the largest corresponding regression coefficient.
 
-These relationships are supported by my exploratory data analysis, regression analysis, and the variable importance metrics in the machine learning models. Interestingly, contrary to my initial hypothesis, the rates of vaccinations among hospital staff positively correlate with the outcomes. In addition, this correlation direction appear to be reversed when grouping by state, which makes sense for the rates of vaccinations. Despite this, my exploratory data analysis and the performances of the machine learning models indicate that these relationships are likely generally weak. Moreover, I did not find any significant relationships between ED volume and the rest of the variables.
+These relationships are supported by my exploratory data analysis, regression analysis, and the variable importance metrics in the machine learning models. Interestingly, contrary to my initial hypothesis, the rates of vaccinations among hospital staff positively correlate with the outcomes. In addition, this correlation direction appear to be reversed when grouping by state, which makes sense for the rates of vaccinations. Despite this, my exploratory data analysis indicates that these relationships are likely generally weak. Moreover, I did not find any significant relationships between ED volume and the rest of the variables, even after applying a logarithmic transformation to the outcomes.
 
-There are likely several limitations to my analysis, including unaddressed confounding factors. Importantly, an issue with the datasets used is that each dataset has different time periods of data collection. This means the values of interest are aggregated across different periods and may not be exactly comparable between datasets. Here, I have been assuming that the values for each hospital are similar between different time periods. However, this is a rather naive assumption and may have adversely affected my analysis. To resolve this issue, it would be helpful to be able to look at the trends in the variables across time, such as by day or month. This can be investigated to extend this analysis in the future.
+There are likely several limitations to my analysis, including unaddressed confounding factors. Importantly, an issue with the datasets used is that each dataset has different time periods of data collection. This means the values of interest are aggregated across different periods and may not be exactly comparable between datasets. Here, I have been assuming that the values for each hospital are similar between different time periods. However, this is a rather naive assumption and may have adversely affected my analysis. To resolve this issue, it would be helpful to be able to look at the trends in the variables across time, such as by day or month. This can be investigated with other datasets to extend this analysis in the future.
 
 # Works cited
 
