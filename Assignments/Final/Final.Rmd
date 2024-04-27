@@ -139,7 +139,7 @@ merged |> filter(hem_count > 300) |> count()
 
 # Introduction
 
-Health complications following surgery, or postoperative health complications, often pose problems to treatment efficacy and contribute to higher healthcare costs (Dencker et al. 2021). Potential factors for them include healthcare-associated infections or hospital-acquired infections (HAI), which are common in hospitals and can increase morbidity and mortality in patients (Kanerva et al. 2008). Other factors that may influence treatment include staff vaccination rates (Hollmeyer et al. 2012) and emergency department (ED) volume (Brar et al. 2013). Identifying the specific infections and factors that correlate with the greatest increase in postoperative health complications will inform initiatives of hospitals to improve their quality and efficiency of care.
+Health complications following surgery, or postoperative health complications, often pose problems to treatment efficacy and contribute to higher healthcare costs (Dencker et al. 2021). Potential factors for them include hospital-acquired infections or healthcare-associated infections (HAI), which are common in hospitals and can increase morbidity and mortality in patients (Kanerva et al. 2008). Other factors that may influence treatment include staff vaccination rates (Hollmeyer et al. 2012) and emergency department (ED) volume (Brar et al. 2013). Identifying the specific infections and factors that correlate with the greatest increase in postoperative health complications will inform initiatives of hospitals to improve their quality and efficiency of care.
 
 For 5424 hospitals registered with Medicare in the U.S., the [Centers for Medicare & Medicaid Services](https://www.cms.gov) have collected data regarding HAI, ED volume, staff vaccination rates, and complications and mortality rates.
 
@@ -149,15 +149,15 @@ For 5424 hospitals registered with Medicare in the U.S., the [Centers for Medica
 
 - The [Complications and Deaths - Hospital](https://data.cms.gov/provider-data/dataset/ynj2-r877) dataset (dataset 3) records various rates of complications and rates of death per hospital, such as for post-surgery wound dehiscence, post-surgery respiratory failure, and collapsed lung. The values are cumulative from 07/01/2020 to 06/30/2022.
 
-The question to be explored is, "Can healthcare-acquired blood infections, ED volumes, and/or staff vaccination rates reliably predict postoperative blood-related complication rates in Medicare hospitals?" My current hypothesis is that a subset of the variables can reliably predict complication rates after surgery. In addition, I hypothesize that all but vaccination rates positively correlate with postoperative blood-related complications. This is since infections would increase the risk of complications occurring and higher ED volumes would lead to more sources of contamination, while increased vaccination might reduce transmissions of infections from staff to patients. I also aim to investigate how these relations vary across states.
+The question to be explored is, "Can hospital-acquired blood infections, ED volumes, and / or staff vaccination rates reliably predict postoperative blood-related complication rates in Medicare hospitals?" My current hypothesis is that a subset of the variables can reliably predict complication rates after surgery. In addition, I hypothesize that all but vaccination rates positively correlate with postoperative blood-related complications. This is since infections would increase the risk of complications occurring and higher ED volumes would lead to more sources of contamination, while increased vaccination might reduce transmissions of infections from staff to patients. I also aim to investigate how these relations vary across states.
 
 # Methods
 
 ## Variables
 
-For sources of healthcare-acquired blood infections, which is a predictor in my question, I chose to look at central lines and the staph bacteria since they affect the bloodstream directly. I did not look at the other sources of infections recorded by the datasets since they do not affect the bloodstream directly, instead implicating parts of the abdomen such as the colon and urinary tract.
+For sources of hospital-acquired blood infections, which is a predictor in my question, I chose to look at central lines and the staph bacteria since they affect the bloodstream directly. I did not look at the other sources of infections recorded by the datasets since they do not affect the bloodstream directly, instead implicating parts of the abdomen such as the colon and urinary tract.
 
-For postoperative blood-related complication rates, which is the outcome in my question, I chose to look at hemorrhage/hematoma events (loss of blood from damaged blood vessels), serious blood clots, and bloodstream infections since they are common complications and affect blood cells and vessels. I did not look at the other complications recorded by the datasets since they do not relate to blood, instead implicating the respiratory system and epithelial tissues.
+For postoperative blood-related complication rates, which is the outcome in my question, I chose to look at hemorrhage / hematoma events (loss of blood from damaged blood vessels), serious blood clots, and bloodstream infections since they are common complications and affect blood cells and vessels. I did not look at the other complications recorded by the datasets since they do not relate to blood, instead implicating the respiratory system and epithelial tissues.
 
 Thus, I will use the following variables for my analysis:
 
@@ -278,7 +278,7 @@ ggplot(merged, aes(x = stream_count)) +
   plot_annotation(title = "Distributions of the outcome variables (numbers of events)")
 ```
 
-From the above histograms, the rates appear to be normally distributed with slightly longer right tails, while the counts of events appear to be Poisson distributed with no obvious upper bounds. This suggests that compared to linear regression, Poisson or negative binomial regression might be more suitable to model postoperative complications, which will be done later on.
+From the above histograms, the rates appear to be normally distributed with slightly longer right tails, while the counts of events appear to be Poisson distributed with no obvious upper bounds. This suggests that compared to linear regression, Poisson or negative binomial regression might be more suitable to model postoperative complications, which will be performed later on.
 
 Next, I explore the pairwise correlations between the numeric variables.
 
@@ -307,7 +307,7 @@ Since `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` appe
 
 - For the third pair of maps, `staph` and `stream` appear to have a slight negative relationship across states. Several states with high mean rates of hospital-acquired staph infections, such as West Virginia and Louisiana, have low mean rates of postoperative bloodstream infections. However, the relationship between the variables is weak since rates of postoperative bloodstream infections appear to be roughly uniform across states.
 
-Overall, the pairs of variables appear to have negative relationships across states, which is intriguing since they are positively correlated without grouping by state. This is more intuitive for the first two pairs of variables, since hospitals with a high proportion of vaccinated workers are likely to be more careful when handling potential sources of health hazards. Thus, the states with these hospitals are likely to have fewer postoperative complications overall.
+Overall, the pairs of variables appear to have negative relationships across states, which is intriguing since in the heatmap, they are positively correlated without grouping by state. This is more intuitive for the first two pairs of variables, since hospitals with a high proportion of vaccinated workers are likely more careful when handling potential sources of health hazards. Thus, states with these hospitals are likely to have fewer postoperative complications overall.
 
 Next, I explore the relationship between ED volume and the numeric variables.
 
@@ -343,7 +343,7 @@ merged |>
   plot_annotation(title = "Outcome variables by ED volume")
 ```
 
-For all three outcomes, the above boxplots show that the distributions become wider and more dispersed as ED volume increases. This makes sense since hospitals with higher ED volumes might have more potential sources of infection. As well, during periods of high ED volumes, hospital workers might be more variable in their attention to health hazards since they are often busier and more overworked.
+For all three outcomes, the above boxplots show that the distributions become wider and more dispersed as ED volume increases. This makes sense since hospitals with higher ED volumes might have more potential sources of infection. As well, during periods of high ED volumes, hospital workers might be more variable in their attention to health hazards since they likely to be busier and more overworked.
 
 Since I suspect heteroskedasticity in the outcomes when grouping by ED volume, I apply a logarithmic transformation to the outcomes for the following scatterplots. As before, I choose to explore the relationships between `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` since they have the largest correlations of any pair of predictors and outcomes in the heatmap.
 
@@ -386,7 +386,7 @@ In the above scatterplots, the relationships for all three pairs of variables ar
 
 I will use generalized linear models (e.g., Poisson regression) since the outcomes are expressed in rates, which are calculated using counts of postoperative complications out of the total number of operations for each hospital. Thus, the response variables in the models will be the counts, while the offset terms will be the total number of operations for each hospital.
 
-First, I perform Poisson regression on `hem_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `hem_count` is the number of postoperative hemorrhage / hematoma events for each hospital and `log(total)` is the offset. However, this model is a poor fit to the data since its standardized residuals (not shown) appear to be overdispersed. In addition, `flu_vac` is the only significant predictor, with a corresponding P-value of 5.49e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `hem_count ~ flu_vac + offset(log(total))`.
+First, I perform Poisson regression on `hem_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `hem_count` is the number of postoperative hemorrhage / hematoma events for each hospital and `log(total)` is the offset. However, this model is a poor fit to the data since its standardized residuals (not shown) appear to be overdispersed. In addition, `flu_vac` is the only significant predictor in the model, with a corresponding P-value of 5.49e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `hem_count ~ flu_vac + offset(log(total))`.
 
 ```{r, echo = FALSE}
 # summary(glm(data = merged, formula = hem_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(hem_denom)), family = poisson))
@@ -398,7 +398,7 @@ kable(coef1, caption = "Negative binomial regression summary for $hem$ vs $flu\\
 
 In the above table, the summary shows that for every increase of 1% in the rate of flu vaccinations among staff in a hospital, the logarithm of the expected number of postoperative hemorrhage / hematoma events increases by 0.0017. In other words, the expected number of postoperative hemorrhage / hematoma events increases by a factor of $\exp(0.0017) = 1.0017$. The P-value of the predictor is 1e-07 < 0.001, indicating significance. The AIC of the current model (13534) is lower than the AIC of the corresponding Poisson model (15357), indicating the current model better fits the data.
 
-Next, I perform Poisson regression on `clot_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `clot_count` is the number of postoperative serious blood clot events for each hospital and `log(total)` is the offset. However, as before, the standardized residuals of the model appear to be overdispersed. In addition, `covid_vac` is the only significant predictor, with a corresponding P-value of 2e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `clot_count ~ covid_vac + offset(log(total))`.
+Next, I perform Poisson regression on `clot_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `clot_count` is the number of postoperative serious blood clot events for each hospital and `log(total)` is the offset. However, as before, the standardized residuals of the model appear to be overdispersed. In addition, `covid_vac` is the only significant predictor in the model, with a corresponding P-value of 2e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `clot_count ~ covid_vac + offset(log(total))`.
 
 ```{r, echo = FALSE}
 # summary(glm(data = merged, formula = clot_count ~ central_line + staph + ed_vol + covid_vac + flu_vac, offset = log(clot_denom), family = poisson))
@@ -410,7 +410,7 @@ kable(coef2, caption = "Negative binomial regression summary for $clot$ vs $covi
 
 In the above table, the summary shows that for every increase of 1% in the rate of COVID vaccinations among staff in a hospital, the logarithm of the expected number of postoperative serious blood clot events increases by 0.0033. In other words, the expected number of postoperative serious blood clot events increases by a factor of $\exp(0.0033) = 1.0033$. The P-value of the predictor is 0 < 0.001, indicating significance. The AIC of the current model (15427) is lower than the AIC of the corresponding Poisson model (19051), indicating the current model better fits the data.
 
-Finally, for the same reasons as before, I perform negative binomial regression on `stream_count ~ staph + offset(log(total))`, where `stream_count` is the number of postoperative bloodstream infection events for each hospital, `staph` is the only significant predictor with a P-value of 8.27e-06 < 0.001, and `log(total)` is the offset.
+Finally, for the same reasons as before, I perform negative binomial regression on `stream_count ~ staph + offset(log(total))`, where `stream_count` is the number of postoperative bloodstream infection events for each hospital, `staph` is the only significant predictor in the corresponding Poisson model (P-value = 8.27e-06 < 0.001), and `log(total)` is the offset.
 
 ```{r, echo = FALSE}
 # summary(glm(data = merged, formula = stream_count ~ central_line + staph + ed_vol + covid_vac + flu_vac, offset = log(stream_denom), family = poisson))
@@ -420,9 +420,9 @@ colnames(coef3) <- c("Estimate", "Std. error", "z-value", "P-value")
 kable(coef3, caption = "Negative binomial regression summary for $stream$ vs $staph$")
 ```
 
-In the above table, the summary shows that for every increase of 1% in the rate of hospital-acquired staph infections in a hospital, the logarithm of the expected number of postoperative bloodstream infections increases by 8.07. In other words, the expected number of postoperative bloodstream infections increases by a factor of $\exp(8.07) = 3195$. The P-value of the predictor is 1e-07 < 0.001, indicating significance. The AIC of the current model (12569) is lower than the AIC of the corresponding Poisson model (14139), indicating the current model better fits the data.
+In the above table, the summary shows that for every increase of 1% in the rate of hospital-acquired staph infections in a hospital, the logarithm of the expected number of postoperative bloodstream infections increases by 8.07. In other words, the expected number of postoperative bloodstream infections increases by a factor of $\exp(8.07) = 3195$. This regression coefficient is very large, likely because the values for `staph` in the data are very close to 0%. The P-value of the predictor is 1e-07 < 0.001, indicating significance. The AIC of the current model (12569) is lower than the AIC of the corresponding Poisson model (14139), indicating the current model better fits the data.
 
-Overall, `flu_vac`, `covid_vac`, and `staph` are relatively significant predictors for `hem`, `clot`, and `stream` respectively, which agrees with the results of my exploratory data analysis. In particular, the regression coefficient associated with an increase of 1% for `staph` is very large, which can be explained by the fact that the values for `staph` are currently much smaller than 1%.
+Overall, `flu_vac`, `covid_vac`, and `staph` are relatively significant predictors for `hem`, `clot`, and `stream` respectively, which agrees with the results of my exploratory data analysis.
 
 ## Machine learning models
 
@@ -503,7 +503,7 @@ imp8$var_names <- rownames(imp8)
 imp9$var_names <- rownames(imp9)
 ```
 
-To answer my question using machine learning, I will create bagging, random forest, and XGBoost models for each outcome and explore their variable importance. To calculate the test MSEs of the models, I will split the data into 70% train and 30% test sets.
+To answer my question using machine learning, I create bagging, random forest, and XGBoost models for each outcome and explore their variable importance metrics. To train the models and calculate their test MSEs, I split the data into 70% train and 30% test sets.
 
 ```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 imp1 |>
@@ -604,6 +604,8 @@ imp9 |>
 
 The above plot shows that `central_line` is the most important variable and `staph` is the second most important variable for predicting `stream` in the bagging and random forest models. Interestingly, `central_line` and `staph` have very similar levels of importance in the random forest model. Importantly, `staph` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `stream`. Again, `ED_vol` is the least important variable for all models.
 
+Finally, I now look at the test MSEs of the models.
+
 ```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 # Plotting MSE
 
@@ -644,15 +646,21 @@ data.frame(Method = c("Bagging", "Random forest", "XGBoost"),
 
 The above plot shows that the random forest model has the smallest MSE when predicting `hem` and `clot` on the test set, while the XGBoost model has the smallest MSE when predicting `stream` on the test set. Interestingly, all three models have very similar MSEs when predicting `hem` and `clot`, while the bagging model has a significantly larger MSE when predicting `stream`.
 
-For `hem`, `clot`, and `stream`, the ratios of the model MSEs to their variances are `r mean((predict(rf1, test) - test$hem)^2) / var(test$hem)`, `r mean((predict(rf2, test) - test$clot)^2) / var(test$clot)`, and `r mean((predict(xgb3, test) - test$stream)^2) / var(test$stream)` respectively. Thus, the MSEs of the models are close to the variances of the outcomes, indicating that the models likely have low predictive power and that the relationships between the predictors and outcomes are ultimately weak. Nevertheless, the variable importance metrics, especially for the XGBoost model, agrees with my previous findings, indicating that the variables are at least related to some extent.
+For `hem`, `clot`, and `stream`, the ratios of the model MSEs to their variances are `r mean((predict(rf1, test) - test$hem)^2) / var(test$hem)`, `r mean((predict(rf2, test) - test$clot)^2) / var(test$clot)`, and `r mean((predict(xgb3, test) - test$stream)^2) / var(test$stream)` respectively. Thus, the MSEs of the models are close to the variances of the outcomes, indicating that the models likely have low predictive power and that the relationships between the predictors and outcomes are ultimately weak. Nevertheless, the variable importance metrics (especially for the XGBoost model) agree with my previous findings, indicating that the predictors and outcomes are at least related to some extent.
 
 # Summary
 
-Overall, the analysis showed that the relations between the predictors and outcomes of interest are mostly weak. This outcome continued to hold after accounting for states, transforming the response variables, and performing linear regression. In particular, the heatmap indicated generally low correlations between the variables, while the non-linear patterns in the scatterplots and adjusted R-squared values of the regression summaries suggest that the data is poorly described by linear models. In addition, the apparent negative relations between variables at the state level somewhat contradict the positive correlations in the heatmap, furthering confounding the analysis. Therefore, my hypothesis for the main question has little support currently, and further analysis is required to answer the question more conclusively.
+Overall, I found that rates of vaccinations among hospital staff and hospital-acquired staph infections are able to predict postoperative blood-related complication rates to some extent. Specifically, `flu_vac`, `covid_vac`, and `staph` are the most significant predictors for `hem`, `clot`, and `stream` respectively, or in other words:
 
-There are many potential reasons for this less-than-ideal result, including unaddressed confounding factors. Importantly, an issue with the datasets used is that each dataset has different time periods of data collection. This means the values of interest are aggregated across different periods and may not be exactly comparable between datasets. Here, I have been assuming that the values for each hospital are similar between different time periods. However, this is a rather naive assumption and may have been a major limitation of my analysis.
+- The rate of flu vaccinations among hospital staff is likely related to the rate of postoperative hemorrhage / hematoma events;
 
-Despite the insignificant findings, for two of the fitted models, the rate of healthcare-acquired staph infections had relatively large estimated regression coefficients (13% and 19%), meaning that it is likely to have a larger effect on the outcomes compared to other predictors and thus worthy of further investigation. Moreover, methods other than linear regression may prove more suitable for the data, and they will be explored in the continuation of this analysis.
+- The rate of COVID vaccinations among hospital staff is likely related to the rate of postoperative serious blood clots; and
+
+- The rate of hospital-acquired staph infections is likely related to the rate of postoperative bloodstream infections.
+
+These relationships are supported by my exploratory data analysis, regression analysis, and the variable importance metrics in the machine learning models. Interestingly, contrary to my initial hypothesis, the rates of vaccinations among hospital staff positively correlate with the outcomes. In addition, this correlation direction appear to be reversed when grouping by state, which makes sense for the rates of vaccinations. Despite this, my exploratory data analysis and the performances of the machine learning models indicate that these relationships are likely generally weak. Moreover, I did not find any significant relationships between ED volume and the rest of the variables.
+
+There are likely several limitations to my analysis, including unaddressed confounding factors. Importantly, an issue with the datasets used is that each dataset has different time periods of data collection. This means the values of interest are aggregated across different periods and may not be exactly comparable between datasets. Here, I have been assuming that the values for each hospital are similar between different time periods. However, this is a rather naive assumption and may have adversely affected my analysis. To resolve this issue, it would be helpful to be able to look at the trends in the variables across time, such as by day or month. This can be investigated to extend this analysis in the future.
 
 # Works cited
 
