@@ -7,6 +7,7 @@ output:
     toc: true
     toc_depth: 3
     number_sections: true
+urlcolor: blue
 ---
 
 \newpage
@@ -212,17 +213,20 @@ Looking at the distribution of each variable, I did not find outliers or implaus
 
 For `central_line` and `staph`, 37.8% and 44.2% of their values are 0%. These points may skew my overall results, but since they make up a large proportion of the values, I did not remove them entirely. Instead, I only removed them temporarily in some exploratory graphs for clarity.
 
-## Data exploration tools
+## Tools used
 
 For data exploration, I created:
 
-- A table of the numerical variables' summary statistics using `kable` and `kable_styling` from kableExtra;
-- A heatmap of pairwise correlations between the numerical variables. I used `melt` from the reshape2 package on the correlation matrix, then plotted and colored the values using `geom_tile` and `geom_text` from ggplot2;
-- 3 pairs of choropleth maps showing the means of `staph` and `stream`, `covid_vac` vs `clot`, and `flu_vac` vs `hem`. I selected these pairs since according to the previous heatmap, they have the largest correlations of any pair of predictors and outcomes. (This is explained in the next section.) I first obtained a dataset with the coordinates of state boundaries from the maps package, to which I had to add abbreviations for each state. I then merged it with my main dataset and plotted it using `geom_polygon` from ggplot2;
-- 3 boxplots showing the distributions of the outcomes grouped by ED volume. I used `geom_boxplot` from ggplot2 and `plot_layout` from the patchwork package;
-- 3 scatterplots showing the relations between the log-transformed outcomes vs `flu_vac`, `covid_vac`, and `staph`, grouping by ED volume. I transformed the outcomes since I suspected heteroskedasticity in their values. As with the choropleth maps, I selected these pairs of variables since they have the largest correlations of any pair of predictors and outcomes in the heatmap. I used `geom_point` and `geom_smooth` from ggplot2 and `plot_layout` from the patchwork package;
-- Summaries of ANOVA F-tests (not shown) for all predictors and outcomes. I used `aov` from the stats package and `kable_styling` from kableExtra;
-- 3 tables showing summaries of regression models for the following formulae: `hem ~ flu_vac`, `clot ~ central_line + staph + covid_vac`, and `stream ~ central_line + staph`. For each dependent variable, I selected these predictors since they have the most significant P-values in the ANOVA analysis with the same dependent variable. I used `lm` from the stats package and `kable_styling` from kableExtra.
+- A table showing the summary statistics of the numeric variables using `kable` and `kable_styling` from kableExtra;
+- Six histograms of the outcomes as rates and counts using `geom_histogram` from ggplot2 and `plot_layout` from patchwork;
+- A heatmap of pairwise correlations between the numeric variables using `melt` from reshape2 and `geom_tile` and `geom_text` from ggplot2;
+- Three pairs of choropleth maps showing the means of selected numeric variables by state using `plot_geo` from plot_ly;
+- Three boxplots of the outcomes grouped by ED volume using `geom_boxplot` from ggplot2 and `plot_layout` from patchwork;
+- Three scatterplots of the log-transformed outcomes vs `flu_vac`, `covid_vac`, and `staph` grouped by ED volume using `geom_point` and `geom_smooth` from ggplot2 and `plot_layout` from patchwork.
+
+For regression analysis, I performed Poisson and negative binomial regression using `glm` from the stats package and `glm.nb` from MASS.
+
+For the machine learning models, I created bagging, random forest, and XGBoost models using `randomForest` from randomForest and `train` from caret.
 
 # Results
 
@@ -243,7 +247,9 @@ kable(merged_summary, caption = "Summary of the numeric variables (rates)") |>
 
 First, I explore the distributions of the numeric variables. Table 2 shows that the rates of central line and staph infections are very skewed towards 0%, meaning these infections rarely occur in hospitals. This agrees with my previous finding that 37.8% and 44.2% of `central_line` and `staph` respectively are 0%. Both vaccination rates are skewed towards 100%, indicating that hospitals are generally successful in encouraging vaccination among their workers. Finally, the outcome variables are all skewed towards 0%, meaning postoperative blood-related complications are generally uncommon. Of these variables, the rate of postoperative bloodstream infections is the largest across all listed metrics, indicating that it is relatively more common than the other outcomes.
 
-```{r, echo = FALSE, message = FALSE, fig.show = "hold", out.width = "50%"}
+To further explore their distributions, I now look at the outcome variables both as rates and as counts of postoperative complications.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.align = 'center', out.width = "75%"}
 ggplot(merged, aes(x = hem)) +
   geom_histogram() +
   labs(x = "Hemorrhage / hematoma rate", y = "Count") +
@@ -255,9 +261,7 @@ ggplot(merged, aes(x = stream)) +
   labs(x = "Bloodstream infection rate", y = "Count") +
   plot_layout(nrow = 3) +
   plot_annotation(title = "Distributions of the outcome variables (rates)")
-```
 
-```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.show = "hold", out.width = "50%"}
 ggplot(merged, aes(x = hem_count)) +
   geom_histogram(bins = 50) +
   xlim(0, 200) +
@@ -274,9 +278,11 @@ ggplot(merged, aes(x = stream_count)) +
   plot_annotation(title = "Distributions of the outcome variables (numbers of events)")
 ```
 
-To further explore their distributions, I now look at the outcome variables both as rates and as counts of postoperative complications. The rates appear to be normally distributed with slightly longer right tails, while the counts of events appear to be Poisson distributed with no obvious upper bounds. This suggests that compared to linear regression, Poisson regression might be more suitable to model postoperative complications, which will be done later on.
+From the above histograms, the rates appear to be normally distributed with slightly longer right tails, while the counts of events appear to be Poisson distributed with no obvious upper bounds. This suggests that compared to linear regression, Poisson or negative binomial regression might be more suitable to model postoperative complications, which will be done later on.
 
-```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+Next, I explore the pairwise correlations between the numeric variables.
+
+```{r, echo = FALSE, fig.align = "center", out.width = "75%"}
 # Pairwise correlation heatmap
 
 merged |>
@@ -287,105 +293,25 @@ merged |>
   geom_tile(aes(fill = value)) +
   geom_text(aes(label = round(value, 2)), size = 3) +
   scale_fill_gradient2(low = "blue", high = "red") +
-  labs(title = "Heatmap of pairwise correlations between numerical variables", fill = "Correlation") +
+  labs(title = "Heatmap of pairwise correlations between the numeric variables", fill = "Correlation") +
   theme(axis.title = element_blank())
 ```
 
-Next, I explore the pairwise correlations between the numerical variables. The heatmap above shows that overall, there is little correlation between the predictors (`central_line`, `staph`, `covid_vac`, `flu_vac`) and the outcomes (`hem`, `clot`, `stream`), with most coefficients being between 0 and 0.1. Among all pairs of predictors and outcomes, the pairs `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` have the greatest coefficients, with values 0.12, 0.11, and 0.11 respectively. This suggests that `flu_vac`, `covid_vac`, and `staph` are likely to be the most significant predictors of these response variables.
+The heatmap above shows that overall, there is little correlation between the predictors (`central_line`, `staph`, `covid_vac`, `flu_vac`) and the outcomes (`hem`, `clot`, `stream`), with most coefficients being between 0 and 0.1. Among all pairs of predictors and outcomes, the pairs `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` have the greatest coefficients, with values 0.12, 0.11, and 0.11 respectively. This suggests that `flu_vac`, `covid_vac`, and `staph` are likely to be the most significant predictors of these response variables. Interestingly, with a coefficient of 0.37, there appears to be collinearity between both rates of vaccination, suggesting that hospital staff tend to be vaccinated against multiple pathogens at the same time. As well, with a coefficient of 0.28, there appears to be collinearity between `central_line` and `staph`, suggesting that these healthcare-acquired infections likely occur together.
 
-Interestingly, with a coefficient of 0.37, there appears to be collinearity between both rates of vaccination, suggesting that hospital staff tend to be vaccinated against multiple pathogens at the same time. As well, with a coefficient of 0.28, there appears to be collinearity between `central_line` and `staph`, suggesting that these healthcare-acquired infections likely occur together.
+Since `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` appear to be correlated in the heatmap, I now explore their relationships across states using the three pairs of cloropleth maps (shown [here](https://ryancys1234.github.io/JSC370-Project/visualizations.html#Mean_values_of_selected_numeric_variables_by_state)):
 
-```{r, echo = FALSE, fig.show = "hold", out.width = "50%"}
-merged |>
-  group_by(state) |>
-  summarize(mean_staph = mean(staph)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_staph)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of healthcare-acquired staph infections by state",
-       fill = "Mean rate\nof staph\ninfections") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
+- For the first pair of maps, `flu_vac` and `hem` appear to have a slight negative relationship across states. Several states with lower rates of flu vaccinations among hospital staff, such as Arkansas and Wiscousin, have higher rates of postoperative hemorrhage / hematoma. Conversely, several states with higher rates of flu vaccinations among hospital staff, such as Maine and Maryland, have lower rates of postoperative hemorrhage / hematoma.
 
-merged |>
-  group_by(state) |>
-  summarize(mean_stream = mean(stream)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_stream)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of postoperative bloodstream infections by state",
-       fill = "Mean rate of\nbloodstream\ninfections") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
-```
+- For the second pair of maps, `covid_vac` and `clot` appear to have a negative relationship across states. Notably, states in New England have high rates of COVID vaccination among hospital staff and low rates of postoperative serious blood clots, while multiple southern states have low rates of COVID vaccination among hospital staff and high rates of postoperative serious blood clots.
 
-```{r, echo = FALSE, fig.show = "hold", out.width = "50%"}
-merged |>
-  group_by(state) |>
-  summarize(mean_covid_vac = mean(covid_vac)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_covid_vac)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of staff COVID vaccinations by state",
-       x = "Longitude", y = "Latitude",
-       fill = "Mean rate of\nvaccinations") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
+- For the third pair of maps, `staph` and `stream` appear to have a slight negative relationship across states. Several states with high mean rates of hospital-acquired staph infections, such as West Virginia and Louisiana, have low mean rates of postoperative bloodstream infections. However, the relationship between the variables is weak since rates of postoperative bloodstream infections appear to be roughly uniform across states.
 
-merged |>
-  group_by(state) |>
-  summarize(mean_clot = mean(clot)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_clot)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of postoperative serious blood clots by state",
-       x = "Longitude", y = "Latitude",
-       fill = "Mean rate\nof serious\nblood clots") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
-```
+Overall, the pairs of variables appear to have negative relationships across states, which is intriguing since they are positively correlated without grouping by state. This is more intuitive for the first two pairs of variables, since hospitals with a high proportion of vaccinated workers are likely to be more careful when handling potential sources of health hazards. Thus, the states with these hospitals are likely to have fewer postoperative complications overall.
 
-```{r, echo = FALSE, fig.show = "hold", out.width = "50%"}
-merged |>
-  group_by(state) |>
-  summarize(mean_flu_vac = mean(flu_vac)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_flu_vac)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of staff flu vaccinations by state",
-       fill = "Mean rate of\nvaccinations") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
+Next, I explore the relationship between ED volume and the numeric variables.
 
-merged |>
-  group_by(state) |>
-  summarize(mean_hem = mean(hem)) |>
-  merge(y = state_coord, by = "state") |>
-  arrange(group, order) |>
-  ggplot(aes(x = long, y = lat, group = group, fill = mean_hem)) +
-  geom_polygon(color = "black") +
-  labs(title = "Mean rate (%) of postoperative hemorrhage/hematoma by state",
-       fill = "Mean rate of\nhemorrhage/\nhematoma") +
-  scale_fill_continuous(high = "#132B43", low = "#56B1F7") +
-  theme(aspect.ratio = 13/24, axis.text = element_blank(),
-        axis.title = element_blank())
-```
-
-For the three pairs of maps above, they show that the corresponding pairs of variables may have negative relationships when comparing between states. This somewhat contradicts the positive correlations of these variables shown in the heatmap. For the first pair, states with high mean rates of staph infections, such as West Virginia and Louisiana, have comparatively lower mean rates of postoperative bloodstream infections. Similarly, for the second pair, states with higher mean rates of staff COVID vaccinations, such as Georgia and Alabama, have comparatively lower mean rates of postoperative serious blood clotting. Finally, for the third pair this trend is the most pronounced, where multiple northern states have relatively low rates of staff flu vaccinations and relatively high rates of postoperative hemorrhage/hematoma. This inverse trend is more intuitive for the latter two pairs of variables, since hospitals with a high proportion of vaccinated workers are likely to be more careful when handling potential sources of health hazards.
-
-Due to the inconclusive results of the previous visualizations, the subsequent visualizations now investigate if ED volume plays any role in the main question.
-
-```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+```{r, echo = FALSE, fig.align = "center", out.width = "75%"}
 merged |>
   mutate(ed_vol = factor(ed_vol, levels = c("low", "medium", "high",
                                             "very high"))) |>
@@ -417,9 +343,11 @@ merged |>
   plot_annotation(title = "Outcome variables by ED volume")
 ```
 
-For all three outcomes, the above boxplots show that the distributions become wider and more dispersed as ED volume increases. This suggests that hospitals with higher ED volumes may be more variable in their attention to health hazards, which makes sense given that their workers are also likely more overworked.
+For all three outcomes, the above boxplots show that the distributions become wider and more dispersed as ED volume increases. This makes sense since hospitals with higher ED volumes might have more potential sources of infection. As well, during periods of high ED volumes, hospital workers might be more variable in their attention to health hazards since they are often busier and more overworked.
 
-```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+Since I suspect heteroskedasticity in the outcomes when grouping by ED volume, I apply a logarithmic transformation to the outcomes for the following scatterplots. As before, I choose to explore the relationships between `flu_vac` and `hem`, `covid_vac` and `clot`, and `staph` and `stream` since they have the largest correlations of any pair of predictors and outcomes in the heatmap.
+
+```{r, echo = FALSE, fig.align = "center", out.width = "75%"}
 merged |>
   mutate(log_hem = log(hem)) |>
   ggplot(aes(x = flu_vac, y = log_hem, color = ed_vol)) +
@@ -449,74 +377,56 @@ merged |>
        y = "Log of bloodstream infection rate",
        color = "ED volume") +
   plot_layout(ncol = 3) +
-  plot_annotation(title = "Log of selected response variables vs selected predictors by ED volume")
+  plot_annotation(title = "Log of outcome variables vs selected predictors by ED volume")
 ```
 
-According to these scatterplots, the relations for all three pairs of variables are more significant in the 'very high' category for ED volume. In other words, among all the regression lines, the lines for 'very high' are the most different from a horizontal line, which would indicate no correlation. Nevertheless, the data points still appear to be overly dispersed after the log-transformation of the outcomes, suggesting that:
-
-- The relations between variables are minor even in the 'very high' category for ED volume.
-- The transformations do not yield significant changes in the relations between the variables.
-
-As such, the outcomes are not transformed for the linear models, which we now turn our attention to.
+In the above scatterplots, the relationships for all three pairs of variables are positive for all ED volumes, which agrees with the positive correlations in the heatmap. Moreover, these relationships are the most significant when ED volume is 'very high', since the regression lines for the group are the steepest. Nevertheless, these relationships are weak overall since the transformed outcomes still appear to be overly dispersed, which means that the transformations likely do not yield significant changes in the relationships between the variables. Thus, the outcomes will not be transformed for the subsequent analyses.
 
 ## Regression analysis
 
-The ANOVA test for `hem ~ central_line + staph + ed_vol + covid_vac + flu_vac` shows the most significant predictor as `flu_vac`, which has a P-value of 1.1e-6 < 0.01. As such, it will be the only predictor for the model for `hem`.
+I will use generalized linear models (e.g., Poisson regression) since the outcomes are expressed in rates, which are calculated using counts of postoperative complications out of the total number of operations for each hospital. Thus, the response variables in the models will be the counts, while the offset terms will be the total number of operations for each hospital.
+
+First, I perform Poisson regression on `hem_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `hem_count` is the number of postoperative hemorrhage / hematoma events for each hospital and `log(total)` is the offset. However, this model is a poor fit to the data since its standardized residuals (not shown) appear to be overdispersed. In addition, `flu_vac` is the only significant predictor, with a corresponding P-value of 5.49e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `hem_count ~ flu_vac + offset(log(total))`.
 
 ```{r, echo = FALSE}
-# kable(as.data.frame(summary(aov(hem ~ central_line + staph + ed_vol + covid_vac + flu_vac, merged))[[1]]), caption = "ANOVA test for $hem \\sim central\\_line + staph + ed\\_vol + covid\\_vac + flu\\_vac$")
+# summary(glm(data = merged, formula = hem_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(hem_denom)), family = poisson))
 
-# summary(lm(hem ~ flu_vac, merged))
-
-coef1 <- coef(summary(lm(hem ~ flu_vac, merged)))
-colnames(coef1) <- c("Estimate", "Std. error", "t-value", "P-value")
-kable(coef1, caption = "Regression summary for $hem$ vs $flu\\_vac$")
+coef1 <- coef(summary(glm.nb(hem_count ~ flu_vac + offset(log(hem_denom)), merged)))
+colnames(coef1) <- c("Estimate", "Std. error", "z-value", "P-value")
+kable(coef1, caption = "Negative binomial regression summary for $hem$ vs $flu\\_vac$")
 ```
 
-In table 2, the summary for the model `hem ~ flu_vac` shows that for every increase of 1% in the rate of staff vaccinated against the flu, the rate of postoperative hemorrhage/hematoma increases by 0.00296%. The corresponding P-value is 0 < 0.01, indicating that the predictor is significant. However, the adjusted R-squared value (not shown) is 0.01301, indicating that the model explains very little of the variation in the data.
+In the above table, the summary shows that for every increase of 1% in the rate of flu vaccinations among staff in a hospital, the logarithm of the expected number of postoperative hemorrhage / hematoma events increases by 0.0017. In other words, the expected number of postoperative hemorrhage / hematoma events increases by a factor of $\exp(0.0017) = 1.0017$. The P-value of the predictor is 1e-07 < 0.001, indicating significance. The AIC of the current model (13534) is lower than the AIC of the corresponding Poisson model (15357), indicating the current model better fits the data.
 
-The ANOVA test for `clot ~ central_line + staph + ed_vol + covid_vac + flu_vac` shows the most significant predictors as `central_line`, `staph`, and `covid_vac`, which have P-values of 3.3e-4 < 0.01, 6.2e-4 < 0.01, and 3e-7 < 0.01 respectively. As such, they will be the predictors for the model for `clot`.
+Next, I perform Poisson regression on `clot_count ~ central_line + staph + ed_vol + covid_vac + flu_vac + offset(log(total))`, where `clot_count` is the number of postoperative serious blood clot events for each hospital and `log(total)` is the offset. However, as before, the standardized residuals of the model appear to be overdispersed. In addition, `covid_vac` is the only significant predictor, with a corresponding P-value of 2e-16 < 0.001. Thus, instead of Poisson regression, I perform negative binomial regression on `clot_count ~ covid_vac + offset(log(total))`.
 
 ```{r, echo = FALSE}
-# kable(as.data.frame(summary(aov(clot ~ central_line + staph + ed_vol + covid_vac + flu_vac, merged))[[1]]), caption = "ANOVA test for $clot \\sim central\\_line + staph + ed\\_vol + covid\\_vac + flu\\_vac$")
+# summary(glm(data = merged, formula = clot_count ~ central_line + staph + ed_vol + covid_vac + flu_vac, offset = log(clot_denom), family = poisson))
 
-# summary(lm(clot ~ central_line + staph + covid_vac, merged))
-
-coef2 <- coef(summary(lm(clot ~ central_line + staph + covid_vac, merged)))
-colnames(coef2) <- c("Estimate", "Std. error", "t-value", "P-value")
-kable(coef2, caption = "Regression summary for $clot$ vs $central\\_line$, $staph$, and $covid\\_vac$")
+coef2 <- coef(summary(glm.nb(clot_count ~ covid_vac + offset(log(clot_denom)), merged)))
+colnames(coef2) <- c("Estimate", "Std. error", "z-value", "P-value")
+kable(coef2, caption = "Negative binomial regression summary for $clot$ vs $covid\\_vac$")
 ```
 
-In table 3, the summary for the model `clot ~ central_line + staph + covid_vac` shows that:
+In the above table, the summary shows that for every increase of 1% in the rate of COVID vaccinations among staff in a hospital, the logarithm of the expected number of postoperative serious blood clot events increases by 0.0033. In other words, the expected number of postoperative serious blood clot events increases by a factor of $\exp(0.0033) = 1.0033$. The P-value of the predictor is 0 < 0.001, indicating significance. The AIC of the current model (15427) is lower than the AIC of the corresponding Poisson model (19051), indicating the current model better fits the data.
 
-- When `staph` and `covid_vac` are held constant, for every increase of 1% in the rate of staph infections, the rate of postoperative serious blood clotting increases by 0.57%. The corresponding P-value is 0.04 > 0.01, indicating that the predictor is moderately significant.
-- When `central_line` and `covid_vac` are held constant, for every increase of 1% in the rate of staph infections, the rate of postoperative serious blood clotting increases by 13.0%. The corresponding P-value is 4.1e-4 < 0.01, indicating that the predictor is significant.
-- When `central_line` and `staph` are held constant, for every increase of 1% in the rate of staff vaccinated against COVID, the rate of postoperative serious blood clotting increases by 0.0092%. The corresponding P-value is 1e-7 < 0.01, indicating that the predictor is significant.
-
-Of these predictors, `staph` appears to be the most significant one. However, the adjusted R-squared value (not shown) is 0.02018, which is somewhat higher than the value for the previous model summary, but still extremely low. This also indicates that the model explains very little of the variation in the data.
-
-The ANOVA test `stream ~ central_line + staph + ed_vol + covid_vac + flu_vac` shows the most significant predictors as `central_line` and `staph`, which have P-values of 6.5e-4 < 0.01 and 1e-5 < 0.01 respectively. As such, they will be the only predictors for the model for `clot`.
+Finally, for the same reasons as before, I perform negative binomial regression on `stream_count ~ staph + offset(log(total))`, where `stream_count` is the number of postoperative bloodstream infection events for each hospital, `staph` is the only significant predictor with a P-value of 8.27e-06 < 0.001, and `log(total)` is the offset.
 
 ```{r, echo = FALSE}
-# kable(as.data.frame(summary(aov(stream ~ central_line + staph + ed_vol + covid_vac + flu_vac, merged))[[1]]), caption = "ANOVA test for $stream \\sim central\\_line + staph + ed\\_vol + covid\\_vac + flu\\_vac$")
+# summary(glm(data = merged, formula = stream_count ~ central_line + staph + ed_vol + covid_vac + flu_vac, offset = log(stream_denom), family = poisson))
 
-# summary(lm(stream ~ central_line + staph, merged))
-
-coef3 <- coef(summary(lm(stream ~ central_line + staph, merged)))
-colnames(coef3) <- c("Estimate", "Std. error", "t-value", "P-value")
-kable(coef3, caption = "Regression summary for $clot$ vs $central\\_line$ and $staph$")
+coef3 <- coef(summary(glm.nb(stream_count ~ staph + offset(log(stream_denom)), merged)))
+colnames(coef3) <- c("Estimate", "Std. error", "z-value", "P-value")
+kable(coef3, caption = "Negative binomial regression summary for $stream$ vs $staph$")
 ```
 
-In table 4, the summary for the model `stream ~ central_line + staph` shows that:
+In the above table, the summary shows that for every increase of 1% in the rate of hospital-acquired staph infections in a hospital, the logarithm of the expected number of postoperative bloodstream infections increases by 8.07. In other words, the expected number of postoperative bloodstream infections increases by a factor of $\exp(8.07) = 3195$. The P-value of the predictor is 1e-07 < 0.001, indicating significance. The AIC of the current model (12569) is lower than the AIC of the corresponding Poisson model (14139), indicating the current model better fits the data.
 
-- When `staph` is held constant, for every increase of 1% in the rate of central line infections, the rate of postoperative blood infection increases by 0.72%. The corresponding P-value is 0.04 > 0.01, indicating that the predictor is moderately significant.
-- When `central_line` is held constant, for every increase of 1% in the rate of central line infections, the rate of postoperative blood infection increases by 21%. The corresponding P-value is 1e-5 < 0.01, indicating that the predictor is significant.
-
-Of these two predictors, `staph` appears to be the more significant one. However, the adjusted R-squared value is 0.01279 (not shown), which is extremely low. Again, the model explains very little of the variation in the data.
+Overall, `flu_vac`, `covid_vac`, and `staph` are relatively significant predictors for `hem`, `clot`, and `stream` respectively, which agrees with the results of my exploratory data analysis. In particular, the regression coefficient associated with an increase of 1% for `staph` is very large, which can be explained by the fact that the values for `staph` are currently much smaller than 1%.
 
 ## Machine learning models
 
-```{r, echo = FALSE, eval = FALSE}
+```{r, echo = FALSE, fig.show = "hide"}
 # Splitting data into train and test sets
 
 set.seed(1)
@@ -524,37 +434,6 @@ train_indices <- sample(1:nrow(merged), round(0.7*nrow(merged)))
 train <- merged[train_indices,]
 test <- merged[-train_indices,]
 
-# Plotting variable importance
-
-var_imp <- function(model, outcome_name, method_name) {
-  imp <- as.data.frame(varImpPlot(model))
-  imp$var_names <- rownames(imp)
-  imp |> ggplot(aes(x = reorder(var_names, IncNodePurity),
-                    y = IncNodePurity)) +
-    geom_point() +
-    geom_segment(aes(x = var_names, xend = var_names,
-                     y = 0, yend = IncNodePurity)) +
-    labs(title = paste("Variable importance for", outcome_name,
-                       "using", method_name),
-         x = "Variable", y = "Increase in node purity") +
-    coord_flip()
-}
-
-var_imp_xgb <- function(model, outcome_name) {
-  imp <- varImp(model)$importance
-  imp$var_names <- rownames(imp)
-  imp |> ggplot(aes(x = reorder(var_names, Overall), y = Overall)) + 
-    geom_point() +
-    geom_segment(aes(x = var_names, xend = var_names,
-                     y = 0, yend = Overall)) +
-    labs(title = paste("Variable importance for", outcome_name,
-                       "using XGBoost"),
-         x = "Variable", y = "Importance") +
-    coord_flip()
-}
-```
-
-```{r, echo = FALSE, eval = FALSE}
 # Bagging
 
 set.seed(1)
@@ -562,12 +441,6 @@ bag1 <- randomForest(hem ~ central_line + staph + ed_vol + covid_vac + flu_vac, 
 bag2 <- randomForest(clot ~ central_line + staph + ed_vol + covid_vac + flu_vac, data = train, mtry = 5)
 bag3 <- randomForest(stream ~ central_line + staph + ed_vol + covid_vac + flu_vac, data = train, mtry = 5)
 
-# var_imp(bag1, "hem", "bagging")
-# var_imp(bag2, "clot", "bagging")
-# var_imp(bag3, "stream", "bagging")
-```
-
-```{r, echo = FALSE, eval = FALSE}
 # Random forest
 
 set.seed(1)
@@ -575,12 +448,6 @@ rf1 <- randomForest(hem ~ central_line + staph + ed_vol + covid_vac + flu_vac, d
 rf2 <- randomForest(clot ~ central_line + staph + ed_vol + covid_vac + flu_vac, data = train)
 rf3 <- randomForest(stream ~ central_line + staph + ed_vol + covid_vac + flu_vac, data = train)
 
-# var_imp(rf1, "hem", "random forest")
-# var_imp(rf2, "clot", "random forest")
-# var_imp(rf3, "stream", "random forest")
-```
-
-```{r, echo = FALSE, eval = FALSE}
 # XGBoost
 
 set.seed(1)
@@ -589,30 +456,155 @@ tune_grid <- expand.grid(
   eta = c(0.001, 0.01, 0.1, 0.2), gamma = 0, subsample = 1,
   min_child_weight = 1, colsample_bytree = 0.6)
 
-xgb1 <- caret::train(
-  hem ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-  data = train, method = 'xgbTree',
-  trControl = trainControl(method = "cv", number = 10, search = "grid"),
-  tuneGrid = tune_grid, verbosity = 0)
+# xgb1 <- caret::train(
+#   hem ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+#   data = train, method = 'xgbTree',
+#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
+#   tuneGrid = tune_grid, verbosity = 0)
 
-xgb2 <- caret::train(
-  clot ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-  data = train, method = 'xgbTree',
-  trControl = trainControl(method = "cv", number = 10, search = "grid"),
-  tuneGrid = tune_grid, verbosity = 0)
+# xgb2 <- caret::train(
+#   clot ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+#   data = train, method = 'xgbTree',
+#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
+#   tuneGrid = tune_grid, verbosity = 0)
 
-xgb3 <- caret::train(
-  stream ~ central_line + staph + ed_vol + covid_vac + flu_vac,
-  data = train, method = 'xgbTree',
-  trControl = trainControl(method = "cv", number = 10, search = "grid"),
-  tuneGrid = tune_grid, verbosity = 0)
+# xgb3 <- caret::train(
+#   stream ~ central_line + staph + ed_vol + covid_vac + flu_vac,
+#   data = train, method = 'xgbTree',
+#   trControl = trainControl(method = "cv", number = 10, search = "grid"),
+#   tuneGrid = tune_grid, verbosity = 0)
 
-# var_imp_xgb(xgb1, "hem")
-# var_imp_xgb(xgb2, "clot")
-# var_imp_xgb(xgb3, "stream")
+# saveRDS(xgb1, "xgb1.rds")
+# saveRDS(xgb2, "xgb2.rds")
+# saveRDS(xgb3, "xgb3.rds")
+
+xgb1 <- readRDS("xgb1.rds")
+xgb2 <- readRDS("xgb2.rds")
+xgb3 <- readRDS("xgb3.rds")
+
+imp1 <- as.data.frame(varImpPlot(bag1))
+imp2 <- as.data.frame(varImpPlot(bag2))
+imp3 <- as.data.frame(varImpPlot(bag3))
+imp4 <- as.data.frame(varImpPlot(rf1))
+imp5 <- as.data.frame(varImpPlot(rf2))
+imp6 <- as.data.frame(varImpPlot(rf3))
+imp7 <- varImp(xgb1)$importance
+imp8 <- varImp(xgb2)$importance
+imp9 <- varImp(xgb3)$importance
+
+imp1$var_names <- rownames(imp1)
+imp2$var_names <- rownames(imp2)
+imp3$var_names <- rownames(imp3)
+imp4$var_names <- rownames(imp4)
+imp5$var_names <- rownames(imp5)
+imp6$var_names <- rownames(imp6)
+imp7$var_names <- rownames(imp7)
+imp8$var_names <- rownames(imp8)
+imp9$var_names <- rownames(imp9)
 ```
 
-```{r, echo = FALSE, eval = FALSE}
+To answer my question using machine learning, I will create bagging, random forest, and XGBoost models for each outcome and explore their variable importance. To calculate the test MSEs of the models, I will split the data into 70% train and 30% test sets.
+
+```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+imp1 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Bagging",
+       x = "Variable", y = "Increase in node purity") +
+  coord_flip() +
+imp4 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Random forest",
+       x = element_blank(), y = "Increase in node purity") +
+  coord_flip() +
+imp7 |>
+  ggplot(aes(x = reorder(var_names, Overall), y = Overall)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = Overall)) +
+  labs(title = "XGBoost",
+       x = element_blank(), y = "Importance") +
+  coord_flip() +
+  plot_layout(ncol = 3) +
+  plot_annotation(title = "Variance importance for predicting the variable 'hem' using:")
+```
+
+The above plot shows that `covid_vac` is the most important variable for predicting `hem` in the bagging and random forest models. In fact, `covid_vac`, `central_line`, `staph`, and `flu_vac` all have very similar levels of importance in the random forest model. Importantly, `flu_vac` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `hem`. Despite this, `flu_vac` has lower importance in the bagging and random forest models. Finally, `ED_vol` is the least important variable for all models, which agrees with the results of my exploratory data analysis.
+
+```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+imp2 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Bagging",
+       x = "Variable", y = "Increase in node purity") +
+  coord_flip() +
+imp5 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Random forest",
+       x = element_blank(), y = "Increase in node purity") +
+  coord_flip() +
+imp8 |>
+  ggplot(aes(x = reorder(var_names, Overall), y = Overall)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = Overall)) +
+  labs(title = "XGBoost",
+       x = element_blank(), y = "Importance") +
+  coord_flip() +
+  plot_layout(ncol = 3) +
+  plot_annotation(title = "Variance importance for predicting the variable 'clot' using:")
+```
+
+The above plot shows that `covid_vac` is the most important variable for predicting `clot` in all models, which agrees with my previous finding that it is a relatively significant predictor for `clot`. Again, `covid_vac`, `central_line`, `staph`, and `flu_vac` all have very similar levels of importance in the random forest model, while `ED_vol` is the least important variable for all models.
+
+```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
+imp3 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Bagging",
+       x = "Variable", y = "Increase in node purity") +
+  coord_flip() +
+imp6 |>
+  ggplot(aes(x = reorder(var_names, IncNodePurity),
+             y = IncNodePurity)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = IncNodePurity)) +
+  labs(title = "Random forest",
+       x = element_blank(), y = "Increase in node purity") +
+  coord_flip() +
+imp9 |>
+  ggplot(aes(x = reorder(var_names, Overall), y = Overall)) +
+  geom_point() +
+  geom_segment(aes(x = var_names, xend = var_names,
+                   y = 0, yend = Overall)) +
+  labs(title = "XGBoost",
+       x = element_blank(), y = "Importance") +
+  coord_flip() +
+  plot_layout(ncol = 3) +
+  plot_annotation(title = "Variance importance for predicting the variable 'stream' using:")
+```
+
+The above plot shows that `central_line` is the most important variable and `staph` is the second most important variable for predicting `stream` in the bagging and random forest models. Interestingly, `central_line` and `staph` have very similar levels of importance in the random forest model. Importantly, `staph` is the most important variable in the XGBoost model, which agrees with my previous finding that it is a relatively significant predictor for `stream`. Again, `ED_vol` is the least important variable for all models.
+
+```{r, echo = FALSE, fig.align = 'center', out.width = "75%"}
 # Plotting MSE
 
 data.frame(Method = c("Bagging", "Random forest", "XGBoost"), 
@@ -622,10 +614,10 @@ data.frame(Method = c("Bagging", "Random forest", "XGBoost"),
   ggplot(aes(x = reorder(Method, MSE), y = MSE)) +
   geom_point() +
   geom_segment(aes(x = Method, xend = Method, y = 0, yend = MSE)) +
-  labs(title = "Test MSE for each method for hem",
+  labs(title = "'hem'",
        x = "Method", y = "MSE") +
-  coord_flip()
-
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
 data.frame(Method = c("Bagging", "Random forest", "XGBoost"), 
            MSE = c(mean((predict(bag2, test) - test$clot)^2),
                    mean((predict(rf2, test) - test$clot)^2),
@@ -633,10 +625,9 @@ data.frame(Method = c("Bagging", "Random forest", "XGBoost"),
   ggplot(aes(x = reorder(Method, MSE), y = MSE)) +
   geom_point() +
   geom_segment(aes(x = Method, xend = Method, y = 0, yend = MSE)) +
-  labs(title = "Test MSE for each method for clot",
-       x = "Method", y = "MSE") +
-  coord_flip()
-
+  labs(title = "'clot'",
+       x = element_blank(), y = "MSE") +
+  coord_flip() +
 data.frame(Method = c("Bagging", "Random forest", "XGBoost"), 
            MSE = c(mean((predict(bag2, test) - test$stream)^2),
                    mean((predict(rf3, test) - test$stream)^2),
@@ -644,10 +635,16 @@ data.frame(Method = c("Bagging", "Random forest", "XGBoost"),
   ggplot(aes(x = reorder(Method, MSE), y = MSE)) +
   geom_point() +
   geom_segment(aes(x = Method, xend = Method, y = 0, yend = MSE)) +
-  labs(title = "Test MSE for each method for stream",
-       x = "Method", y = "MSE") +
-  coord_flip()
+  labs(title = "'stream'",
+       x = element_blank(), y = "MSE") +
+  coord_flip() +
+  plot_layout(ncol = 3) +
+  plot_annotation(title = "Test MSE for each method and outcome")
 ```
+
+The above plot shows that the random forest model has the smallest MSE when predicting `hem` and `clot` on the test set, while the XGBoost model has the smallest MSE when predicting `stream` on the test set. Interestingly, all three models have very similar MSEs when predicting `hem` and `clot`, while the bagging model has a significantly larger MSE when predicting `stream`.
+
+For `hem`, `clot`, and `stream`, the ratios of the model MSEs to their variances are `r mean((predict(rf1, test) - test$hem)^2) / var(test$hem)`, `r mean((predict(rf2, test) - test$clot)^2) / var(test$clot)`, and `r mean((predict(xgb3, test) - test$stream)^2) / var(test$stream)` respectively. Thus, the MSEs of the models are close to the variances of the outcomes, indicating that the models likely have low predictive power and that the relationships between the predictors and outcomes are ultimately weak. Nevertheless, the variable importance metrics, especially for the XGBoost model, agrees with my previous findings, indicating that the variables are at least related to some extent.
 
 # Summary
 
