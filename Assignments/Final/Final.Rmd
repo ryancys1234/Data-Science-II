@@ -226,7 +226,7 @@ For data exploration, I created:
 
 For regression analysis, I performed Poisson and negative binomial regression using `glm` from the stats package and `glm.nb` from MASS.
 
-For the machine learning models, I created bagging, random forest, and XGBoost models using `randomForest` from randomForest and `train` from caret.
+For the machine learning models, I created bagging, random forest, and XGBoost models using `randomForest` from randomForest and `train` from caret. For the bagging models, I set the 'mtry' hyperparameter in `randomForest` to 5, which is the number of predictors for each outcome. For the XGBoost models, I performed grid search on various hyperparameters in `train`, such as 1, 3, 5, and 7 for 'max_depth' and 0.001, 0.01, 0.1, and 0.2 for 'eta'.
 
 # Results
 
