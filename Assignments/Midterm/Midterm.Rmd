@@ -1,6 +1,5 @@
 ---
 title: "JSC370H1 - Midterm"
-author: "Ryan Shi"
 output: 
   html_document:
     theme: readable
@@ -9,19 +8,13 @@ output:
 <style type="text/css">
 .main-container {max-width: 75%; margin-left: auto; margin-right: auto;}</style>
 
-<!-- https://www.hhs.gov/web/developer/index.html -->
+<!-- Links to the database webpages: -->
 <!-- https://data.cms.gov/provider-data/sites/default/files/data_dictionaries/hospital/HOSPITAL_Data_Dictionary.pdf -->
 <!-- https://data.cms.gov/provider-data/dataset/77hc-ibv8 -->
 <!-- https://data.cms.gov/provider-data/dataset/yv7e-xc69 -->
-<!-- https://data.cms.gov/provider-data/dataset/632h-zaca -->
 <!-- https://data.cms.gov/provider-data/dataset/ynj2-r877 -->
-<!-- https://raw.githubusercontent.com/ryancys1234/JSC370-Project/main/state_coord.csv -->
-
-[The repository for this project.](https://github.com/ryancys1234/JSC370-Project)
 
 ```{r, include = FALSE, message = FALSE, warning = FALSE}
-# rm(list=ls())
-
 # install.packages(c("leaflet", "reshape2", "patchwork", "kableExtra"))
 library(readr)
 library(dplyr)
@@ -31,11 +24,11 @@ library(ggplot2)
 library(patchwork)
 library(kableExtra)
 
-hai <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/05819383a875a1ebce5ed5f28755558b_1705521917/Healthcare_Associated_Infections-Hospital.csv")
-tec <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/350f34f9ef3d484925d49dfcce7a0f54_1705521936/Timely_and_Effective_Care-Hospital.csv")
-# uhv <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/37e3c1486ad47b7a0eb471ecf3f7e428_1705521938/Unplanned_Hospital_Visits-Hospital.csv")
-cd <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/1818d71cb5d94636b87ed8459af818d6_1705521912/Complications_and_Deaths-Hospital.csv")
-state_coord <- read_csv("https://raw.githubusercontent.com/ryancys1234/JSC370-Project/main/state_coord.csv")
+# Note: these direct links might change from time to time; refer to the database webpages listed above
+hai <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/05819383a875a1ebce5ed5f28755558b_1712462723/Healthcare_Associated_Infections-Hospital.csv")
+tec <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/350f34f9ef3d484925d49dfcce7a0f54_1712462752/Timely_and_Effective_Care-Hospital.csv")
+cd <- read_csv("https://data.cms.gov/provider-data/sites/default/files/resources/1818d71cb5d94636b87ed8459af818d6_1712462715/Complications_and_Deaths-Hospital.csv")
+state_coord <- read_csv("https://raw.githubusercontent.com/ryancys1234/Data-Science-II/main/Assignments/Midterm/state_coord.csv")
 
 theme_set(theme_minimal())
 ```
